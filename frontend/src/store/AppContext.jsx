@@ -26,7 +26,7 @@ export function AppProvider({ children }) {
   const [isAuth, setIsAuth] = useState(() => localStorage.getItem('isAuth') === 'true')
 
   const login = (user, pass) => {
-    if (user === 'admin' && pass === 'admin') {
+    if (user === 'admin' && (pass === 'admin' || pass === 'admin123')) {
       setIsAuth(true)
       localStorage.setItem('isAuth', 'true')
       return true
