@@ -343,7 +343,7 @@ def test_sales_confirmation_suite():
     track_data = track_res.json()["data"]
     assert track_data["current_stage"] == "PO Created"
     assert track_data["stage_index"] == 4  # Requested (0) -> RFQ Sent (1) -> Quoted (2) -> Approved (3) -> PO Created (4)
-    assert track_data["stages_order"] == ["Requested", "RFQ Sent", "Quoted", "Approved", "PO Created", "Stock In", "Dispatched"]
+    assert track_data["stages_order"] == ["Requested", "RFQ Sent", "Quoted", "Approved", "PO Created", "Stock In", "Dispatched", "Invoiced", "Completed"]
 
     # Verify linked documents contain Customer Quotation, Customer Order, and Purchase Order
     doc_types = {d["document_type"] for d in track_data["linked_documents"]}
