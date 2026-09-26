@@ -13,9 +13,10 @@ export default function Login() {
   const [pass, setPass] = useState('')
   const [error, setError] = useState(false)
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!login(user, pass)) {
+    const success = await login(user, pass)
+    if (!success) {
       setError(true)
     }
   }

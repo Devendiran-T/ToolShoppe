@@ -258,6 +258,13 @@ def init_db(db: Session) -> None:
         db.add_all(sample_items)
         db.commit()
 
+    # 5. Sample 12-Document Order Workflow
+    try:
+        from app.db.seed_demo_workflow import seed_demo_workflow
+        seed_demo_workflow(db)
+    except Exception as exc:
+        logger.warning(f"Demo workflow seeding notice: {exc}")
+
     logger.info("Database initialization and seeding completed successfully.")
 
 

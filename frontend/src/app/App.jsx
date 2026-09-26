@@ -150,7 +150,7 @@ export default function App() {
           </DocLabelProvider>
 
           <footer className="app-footer no-print">
-            <span>Toolsphoppe ERP — back-to-back trading prototype</span>
+            <span>ToolShoppe ERP — Back-to-Back Trading System</span>
             <span>Stock exists only between a supplier delivery and the customer shipment of the same order.</span>
           </footer>
         </Content>
