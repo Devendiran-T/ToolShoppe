@@ -13,6 +13,15 @@ const REF = {
   PR: { label: 'RFQ to supplier', tone: 'info', icon: Send },
   CQ: { label: 'Quotation to customer', tone: 'teal', icon: FileCheck2 },
   PO: { label: 'Purchase order', tone: 'primary', icon: FileText },
+  RFQ: { label: 'RFQ to supplier', tone: 'info', icon: Send },
+  'Customer Quotation': { label: 'Quotation to customer', tone: 'teal', icon: FileCheck2 },
+  'Purchase Order': { label: 'Purchase order', tone: 'primary', icon: FileText },
+}
+
+function formatRecipients(val) {
+  if (Array.isArray(val)) return val.filter(Boolean).join(', ')
+  if (typeof val === 'string') return val
+  return '—'
 }
 
 export default function EmailLog() {
@@ -20,28 +29,41 @@ export default function EmailLog() {
   const nav = useNavigate()
   const [open, setOpen] = useState(null)
 
-  const rows = useMemo(
-    () =>
-      s.emailLog.map((e) => {
-        let doc = '—'
-        let to = null
-        if (e.refType === 'PR') {
-          const pr = s.purchaseRequests.find((x) => x.id === e.refId)
-          doc = pr ? pr.prNo : '—'
-          to = pr ? `/purchase/request/${pr.id}` : null
-        } else if (e.refType === 'CQ') {
-          const cq = s.customerQuotations.find((x) => x.id === e.refId)
-          doc = cq ? cq.cqNo : '—'
-          to = cq ? `/sales/quotation/${cq.id}` : null
-        } else if (e.refType === 'PO') {
-          const po = s.purchaseOrders.find((x) => x.id === e.refId)
-          doc = po ? po.poNo : '—'
-          to = po ? `/purchase/purchase-order/${po.id}` : null
-        }
-        return { ...e, doc, to, recipients: (e.to || []).join(', ') }
-      }),
-    [s]
-  )
+  const rows = useMemo(() => {
+    const list = s?.emailLog || []
+    return list.map((e) => {
+      let doc = '—'
+      let routePath = null
+      const type = e.refType || (e.document_type === 'Customer Quotation' ? 'CQ' : e.document_type === 'Purchase Order' ? 'PO' : 'PR')
+      const refId = e.refId || e.document_id
+
+      if (type === 'PR' || type === 'RFQ') {
+        const pr = (s?.purchaseRequests || []).find((x) => x.id === refId || x.prNo === refId)
+        doc = pr ? pr.prNo : (refId ? (String(refId).startsWith('PR-') ? refId : `PR-${String(refId).padStart(3, '0')}`) : '—')
+        routePath = pr ? `/purchase/request/${pr.id}` : (refId ? `/purchase/request/${refId}` : null)
+      } else if (type === 'CQ' || type === 'Customer Quotation') {
+        const cq = (s?.customerQuotations || []).find((x) => x.id === refId || x.cqNo === refId)
+        doc = cq ? cq.cqNo : (refId ? (String(refId).startsWith('CQ-') ? refId : `CQ-${String(refId).padStart(3, '0')}`) : '—')
+        routePath = cq ? `/sales/quotation/${cq.id}` : (refId ? `/sales/quotation/${refId}` : null)
+      } else if (type === 'PO' || type === 'Purchase Order') {
+        const po = (s?.purchaseOrders || []).find((x) => x.id === refId || x.poNo === refId)
+        doc = po ? po.poNo : (refId ? (String(refId).startsWith('PO-') ? refId : `PO-${String(refId).padStart(3, '0')}`) : '—')
+        routePath = po ? `/purchase/purchase-order/${po.id}` : (refId ? `/purchase/purchase-order/${refId}` : null)
+      }
+
+      const recipients = formatRecipients(e.to || e.recipient)
+      const sentAt = e.sentAt || e.sent_at || ''
+
+      return {
+        ...e,
+        refType: type,
+        doc,
+        routePath,
+        recipients,
+        sentAt,
+      }
+    })
+  }, [s])
 
   const columns = [
     { title: 'Sent at', dataIndex: 'sentAt', width: 186, sorter: true, render: fmtDateTime },
@@ -50,9 +72,9 @@ export default function EmailLog() {
       dataIndex: 'refType',
       width: 200,
       render: (v) => {
-        const r = REF[v] || { label: v, tone: 'neutral', icon: Mail }
-        const t = TONE[r.tone]
-        const Icon = r.icon
+        const r = REF[v] || { label: v || 'Email', tone: 'neutral', icon: Mail }
+        const t = TONE[r.tone] || TONE.neutral
+        const Icon = r.icon || Mail
         return (
           <span className="badge" style={{ background: t.bg, color: t.fg, borderColor: t.border }}>
             <Icon size={12} strokeWidth={2.2} />
@@ -65,14 +87,18 @@ export default function EmailLog() {
       title: 'Document',
       dataIndex: 'doc',
       width: 122,
-      render: (v, r) => <a className="doc-no" onClick={() => r.to && nav(r.to)}>{v}</a>,
+      render: (v, r) => (
+        <a className="doc-no" onClick={() => r.routePath && nav(r.routePath)} style={{ cursor: r.routePath ? 'pointer' : 'default' }}>
+          {v}
+        </a>
+      ),
     },
     { title: 'Recipient', dataIndex: 'recipients', width: 262, render: (v) => <span className="muted">{v}</span> },
     {
       title: 'Subject',
       dataIndex: 'subject',
       render: (v, r) => (
-        <a onClick={() => setOpen(r)} style={{ color: 'var(--c-text)' }}>{v}</a>
+        <a onClick={() => setOpen(r)} style={{ color: 'var(--c-text)', cursor: 'pointer' }}>{v || '—'}</a>
       ),
     },
     {
@@ -113,7 +139,9 @@ export default function EmailLog() {
             key: 'refType',
             placeholder: 'Type',
             width: 216,
-            options: Object.entries(REF).map(([value, r]) => ({ value, label: r.label })),
+            options: Object.entries(REF)
+              .filter(([k]) => ['PR', 'CQ', 'PO'].includes(k))
+              .map(([value, r]) => ({ value, label: r.label })),
           },
         ]}
         empty={{
@@ -126,7 +154,7 @@ export default function EmailLog() {
       <ViewDrawer
         open={!!open}
         onClose={() => setOpen(null)}
-        title={open ? (REF[open.refType] || {}).label || 'Email' : ''}
+        title={open ? (REF[open.refType] || {}).label || open.refType || 'Email' : ''}
         docNo={open ? open.doc : ''}
         subtitle={open ? open.subject : ''}
         width={720}
@@ -138,9 +166,9 @@ export default function EmailLog() {
               <KV
                 items={[
                   ['Sent at', fmtDateTime(open.sentAt)],
-                  ['To', (open.to || []).join(', ')],
-                  ['Subject', open.subject],
-                  ['Document', <a className="doc-no" onClick={() => open.to && nav(open.to)}>{open.doc}</a>],
+                  ['To', open.recipients || formatRecipients(open.to || open.recipient)],
+                  ['Subject', open.subject || '—'],
+                  ['Document', open.routePath ? <a className="doc-no" onClick={() => nav(open.routePath)}>{open.doc}</a> : <span>{open.doc}</span>],
                 ]}
               />
             </DrawerSection>
@@ -158,7 +186,7 @@ export default function EmailLog() {
                   lineHeight: 1.6,
                 }}
               >
-                {open.body}
+                {open.body || 'No content'}
               </pre>
             </DrawerSection>
           </>

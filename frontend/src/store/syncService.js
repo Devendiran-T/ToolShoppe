@@ -83,6 +83,36 @@ export function mapBackendToFrontend(bData, fallback) {
     }))
   }
 
+  // 5. Email Logs
+  if (Array.isArray(bData.emailLog) && bData.emailLog.length > 0) {
+    s.emailLog = bData.emailLog.map((em) => {
+      let refType = 'PR'
+      if (em.document_type === 'Customer Quotation' || em.refType === 'CQ') refType = 'CQ'
+      else if (em.document_type === 'Purchase Order' || em.refType === 'PO') refType = 'PO'
+      else if (em.document_type === 'RFQ' || em.refType === 'PR') refType = 'PR'
+      else if (em.refType) refType = em.refType
+
+      const recipients = Array.isArray(em.recipient)
+        ? em.recipient
+        : em.recipient
+        ? [em.recipient]
+        : Array.isArray(em.to)
+        ? em.to
+        : [em.to || '']
+
+      return {
+        id: em.id,
+        sentAt: em.sent_at || em.sentAt || new Date().toISOString(),
+        to: recipients,
+        subject: em.subject || 'No Subject',
+        body: em.body || '',
+        refType,
+        refId: em.document_id || em.refId,
+        status: em.status || 'Sent',
+      }
+    })
+  }
+
   return s
 }
 
