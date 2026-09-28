@@ -61,9 +61,9 @@ export const salesApi = {
   createOutward: (data) => api.post('/api/v1/sales/outward', data),
 
   // 11. Sales Invoice
-  getSalesInvoices: (params) => api.get('/api/v1/sales/sales-invoice', { params }),
-  getSalesInvoiceById: (id) => api.get(`/api/v1/sales/sales-invoice/${id}`),
-  createSalesInvoice: (data) => api.post('/api/v1/sales/sales-invoice', data),
+  getSalesInvoices: (params) => api.get('/api/v1/sales/invoices', { params }),
+  getSalesInvoiceById: (id) => api.get(`/api/v1/sales/invoices/${id}`),
+  createSalesInvoice: (data) => api.post('/api/v1/sales/invoices', data),
 }
 
 export const purchaseApi = {
@@ -97,9 +97,9 @@ export const purchaseApi = {
   inwardStock: (id) => api.post(`/api/v1/purchase/inward/${id}/add`),
 
   // 12. Purchase Invoice
-  getPurchaseInvoices: (params) => api.get('/api/v1/purchase/purchase-invoice', { params }),
-  getPurchaseInvoiceById: (id) => api.get(`/api/v1/purchase/purchase-invoice/${id}`),
-  createPurchaseInvoice: (data) => api.post('/api/v1/purchase/purchase-invoice', data),
+  getPurchaseInvoices: (params) => api.get('/api/v1/purchase/invoices', { params }),
+  getPurchaseInvoiceById: (id) => api.get(`/api/v1/purchase/invoices/${id}`),
+  createPurchaseInvoice: (data) => api.post('/api/v1/purchase/invoices', data),
 }
 
 export const analyticsApi = {
