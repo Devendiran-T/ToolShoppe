@@ -53,7 +53,7 @@ def get_suppliers(
         elif status_clean in ("false", "inactive", "0"):
             query = query.filter(Supplier.status == False)
 
-    # Search filter (name, supplier_code, email, contact_person, categories)
+    # Search filter (name, supplier_code, email, contact_person, categories, gstin, phone)
     if search:
         search_pattern = f"%{search.strip()}%"
         query = query.filter(
@@ -63,6 +63,8 @@ def get_suppliers(
                 Supplier.email.ilike(search_pattern),
                 Supplier.contact_person.ilike(search_pattern),
                 Supplier.categories.ilike(search_pattern),
+                Supplier.gstin.ilike(search_pattern),
+                Supplier.phone.ilike(search_pattern),
             )
         )
 
@@ -79,8 +81,10 @@ def create_supplier(db: Session, obj_in: SupplierCreate) -> Supplier:
         name=obj_in.name,
         contact_person=obj_in.contact_person,
         phone=obj_in.phone,
+        gstin=obj_in.gstin,
         email=obj_in.email,
         categories=obj_in.categories,
+        address=obj_in.address,
         lead_time_days=obj_in.lead_time_days,
         status=True,
     )

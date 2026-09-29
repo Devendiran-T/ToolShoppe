@@ -53,13 +53,14 @@ def get_items(
     if category:
         query = query.filter(Item.category.ilike(f"%{category.strip()}%"))
 
-    # Search filter (name, item_code, description, hsn_code)
+    # Search filter (name, item_code, brand, description, hsn_code)
     if search:
         search_pattern = f"%{search.strip()}%"
         query = query.filter(
             or_(
                 Item.name.ilike(search_pattern),
                 Item.item_code.ilike(search_pattern),
+                Item.brand.ilike(search_pattern),
                 Item.description.ilike(search_pattern),
                 Item.hsn_code.ilike(search_pattern),
             )
@@ -76,6 +77,7 @@ def create_item(db: Session, obj_in: ItemCreate) -> Item:
     db_obj = Item(
         item_code=code,
         name=obj_in.name,
+        brand=obj_in.brand,
         description=obj_in.description,
         category=obj_in.category,
         unit=obj_in.unit,

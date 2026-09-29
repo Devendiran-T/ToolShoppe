@@ -42,7 +42,15 @@ export function mapBackendToFrontend(bData, fallback) {
       contactPerson: sup.contact_person || sup.contactPerson || '',
       phone: sup.phone || '',
       email: sup.email || '',
-      categories: sup.categories || '',
+      gstin: sup.gstin || '',
+      address: sup.address || '',
+      categories: Array.isArray(sup.categories)
+        ? sup.categories
+        : typeof sup.categories === 'string' && sup.categories.startsWith('[')
+        ? (() => { try { return JSON.parse(sup.categories) } catch { return [sup.categories] } })()
+        : typeof sup.categories === 'string' && sup.categories.trim()
+        ? sup.categories.split(',').map((x) => x.trim()).filter(Boolean)
+        : [],
       leadTimeDays: Number(sup.lead_time_days ?? sup.leadTimeDays ?? 5),
       active: sup.status !== false && sup.active !== false,
     }))
@@ -54,6 +62,7 @@ export function mapBackendToFrontend(bData, fallback) {
       id: it.id,
       code: it.item_code || it.code || `ITM-${it.id}`,
       name: it.name || '',
+      brand: it.brand || '',
       description: it.description || '',
       category: it.category || 'General',
       unit: it.unit || 'Nos',
@@ -156,8 +165,10 @@ export async function syncActionToBackend(action, state) {
             name: record.name,
             contact_person: record.contactPerson,
             phone: record.phone,
+            gstin: record.gstin,
             email: record.email,
             categories: record.categories,
+            address: record.address,
             lead_time_days: Number(record.leadTimeDays || 5),
             status: record.active !== false,
           }
@@ -177,6 +188,7 @@ export async function syncActionToBackend(action, state) {
         } else if (collection === 'items') {
           const payload = {
             name: record.name,
+            brand: record.brand,
             description: record.description,
             category: record.category,
             unit: record.unit,

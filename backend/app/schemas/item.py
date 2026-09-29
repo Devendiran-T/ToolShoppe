@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class ItemBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Item or product name")
+    brand: Optional[str] = Field(None, max_length=100, description="Brand name (e.g. Mitutoyo, YG-1, Addison)")
     description: Optional[str] = Field(None, description="Detailed specifications or finish")
     category: Optional[str] = Field(None, max_length=100, description="Product category (e.g. Cutting tools, Hand tools, Measuring, Abrasives)")
     unit: str = Field(..., min_length=1, max_length=50, description="Unit of measurement (e.g. Nos, Set, Box, Kg, Mtr, Pkt)")
@@ -29,6 +30,7 @@ class ItemCreate(ItemBase):
 
 class ItemUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
+    brand: Optional[str] = Field(None, max_length=100)
     description: Optional[str] = None
     category: Optional[str] = Field(None, max_length=100)
     unit: Optional[str] = Field(None, min_length=1, max_length=50)
