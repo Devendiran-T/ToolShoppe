@@ -138,10 +138,18 @@ export async function syncActionToBackend(action, state) {
             payment_terms: record.paymentTerms,
             status: record.active !== false,
           }
-          if (typeof record.id === 'number') {
-            await mastersApi.updateCustomer(record.id, payload)
+          const existingId = Number(record.id)
+          if (!isNaN(existingId) && existingId > 0) {
+            await mastersApi.updateCustomer(existingId, payload)
           } else {
-            await mastersApi.createCustomer(payload)
+            const found = (state?.customers || []).find(
+              (c) => c.email && c.email.toLowerCase() === (record.email || '').toLowerCase() && Number(c.id) > 0
+            )
+            if (found) {
+              await mastersApi.updateCustomer(Number(found.id), payload)
+            } else {
+              await mastersApi.createCustomer(payload)
+            }
           }
         } else if (collection === 'suppliers') {
           const payload = {
@@ -153,10 +161,18 @@ export async function syncActionToBackend(action, state) {
             lead_time_days: Number(record.leadTimeDays || 5),
             status: record.active !== false,
           }
-          if (typeof record.id === 'number') {
-            await mastersApi.updateSupplier(record.id, payload)
+          const existingId = Number(record.id)
+          if (!isNaN(existingId) && existingId > 0) {
+            await mastersApi.updateSupplier(existingId, payload)
           } else {
-            await mastersApi.createSupplier(payload)
+            const found = (state?.suppliers || []).find(
+              (s) => s.email && s.email.toLowerCase() === (record.email || '').toLowerCase() && Number(s.id) > 0
+            )
+            if (found) {
+              await mastersApi.updateSupplier(Number(found.id), payload)
+            } else {
+              await mastersApi.createSupplier(payload)
+            }
           }
         } else if (collection === 'items') {
           const payload = {
@@ -169,10 +185,18 @@ export async function syncActionToBackend(action, state) {
             last_purchase_rate: Number(record.lastPurchaseRate || 0),
             status: record.active !== false,
           }
-          if (typeof record.id === 'number') {
-            await mastersApi.updateItem(record.id, payload)
+          const existingId = Number(record.id)
+          if (!isNaN(existingId) && existingId > 0) {
+            await mastersApi.updateItem(existingId, payload)
           } else {
-            await mastersApi.createItem(payload)
+            const found = (state?.items || []).find(
+              (it) => it.code && it.code.toLowerCase() === (record.code || '').toLowerCase() && Number(it.id) > 0
+            )
+            if (found) {
+              await mastersApi.updateItem(Number(found.id), payload)
+            } else {
+              await mastersApi.createItem(payload)
+            }
           }
         }
         break

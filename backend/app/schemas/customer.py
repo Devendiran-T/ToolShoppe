@@ -9,6 +9,7 @@ EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
 
 class CustomerBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="Customer company name")
+    contact_person: Optional[str] = Field(None, max_length=100, description="Contact person name")
     email: str = Field(..., description="Primary contact email address")
     phone: Optional[str] = Field(None, max_length=50, description="Contact phone number")
     gstin: Optional[str] = Field(None, max_length=50, description="GSTIN number (e.g. 33AABCB1234K1Z5)")
@@ -37,6 +38,7 @@ class CustomerCreate(CustomerBase):
 
 class CustomerUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
+    contact_person: Optional[str] = Field(None, max_length=100)
     email: Optional[str] = None
     phone: Optional[str] = Field(None, max_length=50)
     gstin: Optional[str] = Field(None, max_length=50)

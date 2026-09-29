@@ -28,6 +28,11 @@ export function AppProvider({ children }) {
   const [state, dispatchLocal] = useReducer(reducer, undefined, load)
   const [isAuth, setIsAuth] = useState(() => localStorage.getItem('isAuth') === 'true')
   const [backendConnected, setBackendConnected] = useState(false)
+  const stateRef = React.useRef(state)
+
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
   const refreshFromBackend = useCallback(async () => {
     try {
@@ -36,7 +41,7 @@ export function AppProvider({ children }) {
       if (bData) {
         dispatchLocal({
           type: 'RESET_DEMO',
-          state: mapBackendToFrontend(bData, state),
+          state: mapBackendToFrontend(bData, stateRef.current),
         })
         setBackendConnected(true)
         return true
@@ -48,7 +53,7 @@ export function AppProvider({ children }) {
     const isHealthy = await checkBackendHealth()
     setBackendConnected(isHealthy)
     return isHealthy
-  }, [state])
+  }, [])
 
   const login = async (user, pass) => {
     try {
@@ -80,11 +85,16 @@ export function AppProvider({ children }) {
   }
 
   const dispatch = useCallback(
-    (action) => {
+    async (action) => {
       dispatchLocal(action)
-      syncActionToBackend(action, state).catch(() => {})
+      try {
+        await syncActionToBackend(action, stateRef.current)
+        await refreshFromBackend()
+      } catch (err) {
+        console.warn('Action sync notice:', err)
+      }
     },
-    [state]
+    [refreshFromBackend]
   )
 
   useEffect(() => {

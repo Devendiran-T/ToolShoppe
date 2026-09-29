@@ -12,6 +12,7 @@ class Customer(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True, autoincrement=True)
     customer_code: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
     name: Mapped[str] = mapped_column(String(200), index=True, nullable=False)
+    contact_person: Mapped[str | None] = mapped_column(String(100), nullable=True)
     email: Mapped[str] = mapped_column(String(200), unique=True, index=True, nullable=False)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     gstin: Mapped[str | None] = mapped_column(String(50), nullable=True)

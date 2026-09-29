@@ -60,6 +60,7 @@ def get_customers(
             or_(
                 Customer.name.ilike(search_pattern),
                 Customer.customer_code.ilike(search_pattern),
+                Customer.contact_person.ilike(search_pattern),
                 Customer.email.ilike(search_pattern),
                 Customer.phone.ilike(search_pattern),
             )
@@ -76,6 +77,7 @@ def create_customer(db: Session, obj_in: CustomerCreate) -> Customer:
     db_obj = Customer(
         customer_code=code,
         name=obj_in.name,
+        contact_person=obj_in.contact_person,
         email=obj_in.email,
         phone=obj_in.phone,
         gstin=obj_in.gstin,
