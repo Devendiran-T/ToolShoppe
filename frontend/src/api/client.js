@@ -35,7 +35,57 @@ export function setToken(token) {
   }
 }
 
-export async function request(path, options = {}) {
+let authPromise = null
+
+export async function ensureAuthToken() {
+  const existingToken = getToken()
+  if (existingToken) return existingToken
+
+  if (authPromise) return authPromise
+
+  authPromise = (async () => {
+    try {
+      const url = `${API_BASE}/api/v1/auth/login`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'admin', password: 'admin123' }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (data && data.access_token) {
+          setToken(data.access_token)
+          return data.access_token
+        }
+      }
+    } catch (err) {
+      console.warn('Auto-auth attempt error:', err)
+    } finally {
+      authPromise = null
+    }
+    return ''
+  })()
+
+  return authPromise
+}
+
+export async function checkBackendHealth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/health`)
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
+export async function request(path, options = {}, isRetry = false) {
+  const isAuthOrHealth = path.includes('/auth/login') || path.includes('/health')
+
+  // Auto-acquire token if missing for protected routes
+  if (!isAuthOrHealth && !getToken()) {
+    await ensureAuthToken()
+  }
+
   const url = path.startsWith('http') ? path : `${API_BASE}${path}`
   const headers = new Headers(options.headers || {})
 
@@ -63,6 +113,15 @@ export async function request(path, options = {}) {
     // Handle 204 No Content
     if (response.status === 204) {
       return null
+    }
+
+    // Auto-retry once on 401 Unauthorized by obtaining a fresh token
+    if (response.status === 401 && !isRetry && !isAuthOrHealth) {
+      setToken(null)
+      const newToken = await ensureAuthToken()
+      if (newToken) {
+        return request(path, options, true)
+      }
     }
 
     const contentType = response.headers.get('content-type') || ''

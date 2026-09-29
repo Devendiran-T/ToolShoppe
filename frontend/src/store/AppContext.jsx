@@ -3,6 +3,7 @@ import { reducer } from './reducer.js'
 import { buildDemoState } from './seedRunner.js'
 import { COLLECTIONS } from './seed.js'
 import { authApi, fetchAllBackendData } from '../api/endpoints.js'
+import { ensureAuthToken, checkBackendHealth } from '../api/client.js'
 import { mapBackendToFrontend, syncActionToBackend } from './syncService.js'
 
 const KEY = 'tools-supplier-prototype-v1'
@@ -30,17 +31,23 @@ export function AppProvider({ children }) {
 
   const refreshFromBackend = useCallback(async () => {
     try {
+      await ensureAuthToken()
       const bData = await fetchAllBackendData()
-      if (bData && (bData.customers?.length > 0 || bData.customerRequests?.length > 0)) {
+      if (bData) {
         dispatchLocal({
           type: 'RESET_DEMO',
           state: mapBackendToFrontend(bData, state),
         })
         setBackendConnected(true)
+        return true
       }
     } catch (err) {
-      console.warn('Backend sync notice (using local prototype state):', err.message || err)
+      console.warn('Backend sync notice:', err.message || err)
     }
+
+    const isHealthy = await checkBackendHealth()
+    setBackendConnected(isHealthy)
+    return isHealthy
   }, [state])
 
   const login = async (user, pass) => {
@@ -50,7 +57,7 @@ export function AppProvider({ children }) {
         setIsAuth(true)
         localStorage.setItem('isAuth', 'true')
         setBackendConnected(true)
-        setTimeout(refreshFromBackend, 100)
+        setTimeout(refreshFromBackend, 50)
         return true
       }
     } catch (err) {
@@ -60,6 +67,7 @@ export function AppProvider({ children }) {
     if (user === 'admin' && (pass === 'admin' || pass === 'admin123')) {
       setIsAuth(true)
       localStorage.setItem('isAuth', 'true')
+      ensureAuthToken().then(() => refreshFromBackend())
       return true
     }
     return false
@@ -88,10 +96,32 @@ export function AppProvider({ children }) {
   }, [state])
 
   useEffect(() => {
-    if (isAuth) {
-      refreshFromBackend()
+    let intervalId = null
+
+    const initConnection = async () => {
+      try {
+        await ensureAuthToken()
+        await refreshFromBackend()
+      } catch (e) {
+        console.warn('Initial connection attempt:', e)
+      }
     }
-  }, [isAuth])
+
+    initConnection()
+
+    // Continuously keep frontend and backend in sync every 15 seconds
+    intervalId = setInterval(initConnection, 15000)
+
+    const onWindowFocus = () => {
+      initConnection()
+    }
+    window.addEventListener('focus', onWindowFocus)
+
+    return () => {
+      if (intervalId) clearInterval(intervalId)
+      window.removeEventListener('focus', onWindowFocus)
+    }
+  }, [refreshFromBackend])
 
   const value = useMemo(
     () => ({
