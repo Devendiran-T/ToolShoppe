@@ -1,0 +1,31 @@
+Tool Shoppe – Testing Checklist |  |  |  |  |  |  |  |  |  |  |  | 
+Tester: Devendiran T     |     Modules: Masters, Advanced Phase 2 Features |  |  |  |  |  |  |  |  |  |  |  | 
+Legend: edit only the yellow columns – Status (dropdown), Tested On (DD-MMM-YYYY) and Defect / Remarks. Menu paths for Masters / Inventory and all 'Negative' expected results are assumed – confirm against the actual system. |  |  |  |  |  |  |  |  |  |  |  | 
+Shared test data: Customer Bharat Engineering Works  |  Item HSS Drill Bit Set 1-13mm  |  Qty 10 Sets  |  Customer PO PO-BEW-2026-001  |  Suppliers Sri Venkateswara Tools, Ganesh Industrial Supplies |  |  |  |  |  |  |  |  |  |  |  | 
+Total Tests | Pass | Fail | Blocked | Not Started | % Tested
+12 | 0 | 0 | 0 | 12 | 0
+Test ID | Module | Feature | Cycle Step | Role | Menu Path | Test Type | Test Steps | Test Data | Expected Result | Status | Tested On | Defect / Remarks
+DT-01 | Masters | Customers | Prereq | Admin / Master user | Masters ➔ Customers | Functional | 1. Click Add Customer.
+2. Enter name and details, set default markup 15%.
+3. Save. | Bharat Engineering Works; default markup 15% | Customer saved and listed; appears in the Customer dropdown of Sales ➔ Customer Request; markup 15% is used later in the Customer Quotation. | Not Started |  | 
+DT-02 | Masters | Customers | Prereq | Admin / Master user | Masters ➔ Customers | Functional | 1. Open the saved customer.
+2. Edit a field (e.g. contact) and Save. | Any changed field | Change is saved and visible on reopening. | Not Started |  | 
+DT-03 | Masters | Customers | Prereq | Admin / Master user | Masters ➔ Customers | Negative | 1. Try to save with mandatory field blank.
+2. Try to add a duplicate customer name. | Blank name; duplicate Bharat Engineering Works | Save is blocked with a clear validation message in both cases. | Not Started |  | 
+DT-04 | Masters | Suppliers | Prereq | Admin / Master user | Masters ➔ Suppliers | Functional | 1. Click Add Supplier.
+2. Enter details and Save.
+3. Repeat for the second supplier. | Sri Venkateswara Tools; Ganesh Industrial Supplies | Both suppliers saved and listed; both appear in the supplier list when sending RFQ (Step 02). | Not Started |  | 
+DT-05 | Masters | Suppliers | Prereq | Admin / Master user | Masters ➔ Suppliers | Functional | 1. Open a supplier, edit a field and Save. | Any changed field | Change is saved and visible on reopening. | Not Started |  | 
+DT-06 | Masters | Suppliers | Prereq | Admin / Master user | Masters ➔ Suppliers | Negative | 1. Save with mandatory field blank.
+2. Add a duplicate supplier name. | Blank name; duplicate Sri Venkateswara Tools | Save is blocked with a clear validation message in both cases. | Not Started |  | 
+DT-07 | Masters | Items | Prereq | Admin / Master user | Masters ➔ Items | Functional | 1. Click Add Item.
+2. Enter name, unit Set, HSN and GST rate.
+3. Save. | HSS Drill Bit Set 1-13mm; Unit Set | Item saved and listed; appears in the Line Items dropdown of Customer Request; HSN and GST values flow to the Sales Invoice. | Not Started |  | 
+DT-08 | Masters | Items | Prereq | Admin / Master user | Masters ➔ Items | Functional | 1. Open the item, edit a field and Save. | Any changed field | Change is saved and visible on reopening. | Not Started |  | 
+DT-09 | Masters | Items | Prereq | Admin / Master user | Masters ➔ Items | Negative | 1. Save with mandatory field blank.
+2. Add a duplicate item name. | Blank name; duplicate HSS Drill Bit Set 1-13mm | Save is blocked with a clear validation message in both cases. | Not Started |  | 
+DT-10 | Advanced Phase 2 Features | To be defined | — | To be defined | To be defined | Functional | Phase 2 scope is not listed in the module report (40% complete). Add the features and test steps here. | — | To be defined | Not Started |  | 
+DT-11 | Common – All members | API integration | — | Team member | All API-backed screens of your module | Integration | 1. Perform every save / send / approve action of your module.
+2. Watch for errors or spinners that never end. | Your module's test data | Every action completes without API or server errors; data saved is shown correctly on reload. | Not Started |  | 
+DT-12 | Common – All members | Testing & QA | All (01-12) | All team members | Full trading cycle (Steps 01-12) | Integration | 1. Run the full 12-step cycle once with the shared test data.
+2. Confirm the steps of your module show the expected status. | Bharat Engineering Works / HSS Drill Bit Set 1-13mm / Qty 10 Sets | Your module's steps show the expected status in the end-to-end run; every defect is logged with an ID in Remarks. | Not Started |  | 

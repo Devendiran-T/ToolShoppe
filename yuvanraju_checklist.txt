@@ -1,0 +1,45 @@
+Tool Shoppe – Testing Checklist |  |  |  |  |  |  |  |  |  |  |  | 
+Tester: Yuvanraju R     |     Modules: Purchase |  |  |  |  |  |  |  |  |  |  |  | 
+Legend: edit only the yellow columns – Status (dropdown), Tested On (DD-MMM-YYYY) and Defect / Remarks. Menu paths for Masters / Inventory and all 'Negative' expected results are assumed – confirm against the actual system. |  |  |  |  |  |  |  |  |  |  |  | 
+Shared test data: Customer Bharat Engineering Works  |  Item HSS Drill Bit Set 1-13mm  |  Qty 10 Sets  |  Customer PO PO-BEW-2026-001  |  Suppliers Sri Venkateswara Tools, Ganesh Industrial Supplies |  |  |  |  |  |  |  |  |  |  |  | 
+Total Tests | Pass | Fail | Blocked | Not Started | % Tested
+15 | 0 | 0 | 0 | 15 | 0
+Test ID | Module | Feature | Cycle Step | Role | Menu Path | Test Type | Test Steps | Test Data | Expected Result | Status | Tested On | Defect / Remarks
+YR-01 | Purchase | Purchase Request (PR) | 02 | Purchase Officer | Purchase ➔ Purchase Request | Functional | 1. After the CR is saved, open Purchase Request.
+2. Compare the new PR with the CR. | HSS Drill Bit Set 1-13mm; Qty 10 | A paired PR was auto-generated with the same items and quantity. | Not Started |  | 
+YR-02 | Purchase | Purchase Request (PR) | 02 | Purchase Officer | Purchase ➔ Purchase Request | Functional | 1. Open the new PR.
+2. Click Send RFQ to Suppliers.
+3. Select 2-3 suppliers.
+4. Click Send RFQ. | Sri Venkateswara Tools; Ganesh Industrial Supplies | PR status updates to RFQ Sent. | Not Started |  | 
+YR-03 | Purchase | Purchase Request (PR) | 02 | Purchase Officer | Purchase ➔ Purchase Request | Negative | 1. Click Send RFQ with no supplier selected. | No supplier selected | RFQ is not sent; a validation message asks for at least one supplier. | Not Started |  | 
+YR-04 | Purchase | Vendor Quotation | 03 | Purchase Executive | Purchase ➔ Vendor Quotation | Functional | 1. Click + Record Quotation.
+2. Select the PR number.
+3. Select Supplier 1, enter Quote Ref, Rate, Delivery days.
+4. Save. | Sri Venkateswara Tools; Ref SV-991; ₹500; 3 days | Quotation saved with status Received. | Not Started |  | 
+YR-05 | Purchase | Vendor Quotation | 03 | Purchase Executive | Purchase ➔ Vendor Quotation | Functional | 1. Repeat for Supplier 2 and Save. | Ganesh Industrial Supplies; ₹550; 5 days | Both vendor quotes appear in the list with status Received. | Not Started |  | 
+YR-06 | Purchase | Vendor Quotation | 03 | Purchase Executive | Purchase ➔ Vendor Quotation | Negative | 1. Try to save a quotation with rate blank.
+2. Try to save without selecting a PR. | Blank rate; no PR | Save is blocked with a clear validation message. | Not Started |  | 
+YR-07 | Purchase | Quotation Comparison | 04 | Purchase Manager / Sourcing Lead | Purchase ➔ Comparison | Functional | 1. Open the comparison for the PR.
+2. Review the matrix. | Two vendor quotes | Matrix compares Supplier 1 vs Supplier 2 on rates, taxes, delivery times and 4-tier recommendations. | Not Started |  | 
+YR-08 | Purchase | Quotation Comparison | 04 | Purchase Manager / Sourcing Lead | Purchase ➔ Comparison | Functional | 1. Select Supplier 1.
+2. Click Approve Supplier. | Sri Venkateswara Tools | Matrix shows Approved; Supplier 1 marked Selected and Supplier 2 marked Rejected. | Not Started |  | 
+YR-09 | Purchase | Purchase Order | 07 | Purchase Officer | Purchase ➔ Purchase Order | Functional | 1. Open the paired supplier PO.
+2. Review lines and terms.
+3. Click Send to Supplier. | Sri Venkateswara Tools | PO exists for the approved supplier; status updates to Sent. | Not Started |  | 
+YR-10 | Purchase | GRN | 08 | Stores / Receiving Supervisor | Purchase ➔ GRN | Functional | 1. Click + New Goods Receipt.
+2. Select the PO.
+3. Enter DC No.
+4. Verify Received 10, Accepted 10, Rejected 0.
+5. Click Submit GRN. | DC No. DC-SV-8841; Received 10 / Accepted 10 / Rejected 0 | GRN status shows Received. | Not Started |  | 
+YR-11 | Purchase | GRN | 08 | Stores / Receiving Supervisor | Purchase ➔ GRN | Negative | 1. Enter Accepted + Rejected that does not equal Received (e.g. Accepted 8, Rejected 1).
+2. Try to submit. | Received 10; Accepted 8; Rejected 1 | Submit is blocked with a clear validation message. | Not Started |  | 
+YR-12 | Purchase | Inward | 09 | Inventory Storekeeper | Purchase ➔ Inward | Functional | 1. Find the pending inward row for this order.
+2. Click Add to Stock. | Pending inward for the PO | Inward status turns to Added. | Not Started |  | 
+YR-13 | Purchase | Invoice | 12 | Accounts Payable Executive | Purchase ➔ Purchase Invoice | Functional | 1. Click + Record Supplier Bill.
+2. Select the GRN.
+3. Enter Supplier Invoice No. and Due Date.
+4. Click Save Invoice. | Invoice No. BILL-SV-771; Due Date | Purchase Invoice recorded and matched with the GRN, completing the trading loop. | Not Started |  | 
+YR-14 | Common – All members | API integration | — | Team member | All API-backed screens of your module | Integration | 1. Perform every save / send / approve action of your module.
+2. Watch for errors or spinners that never end. | Your module's test data | Every action completes without API or server errors; data saved is shown correctly on reload. | Not Started |  | 
+YR-15 | Common – All members | Testing & QA | All (01-12) | All team members | Full trading cycle (Steps 01-12) | Integration | 1. Run the full 12-step cycle once with the shared test data.
+2. Confirm the steps of your module show the expected status. | Bharat Engineering Works / HSS Drill Bit Set 1-13mm / Qty 10 Sets | Your module's steps show the expected status in the end-to-end run; every defect is logged with an ID in Remarks. | Not Started |  | 

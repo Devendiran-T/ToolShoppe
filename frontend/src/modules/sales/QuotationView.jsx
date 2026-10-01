@@ -22,15 +22,15 @@ export default function QuotationView() {
   const [showSourcing, setShowSourcing] = useState(false)
   const [resend, setResend] = useState(false)
 
-  const cq = state.customerQuotations.find((x) => x.id === id)
+  const cq = (state.customerQuotations || []).find((x) => String(x.id) === String(id))
   useDocLabel(cq ? cq.cqNo : null)
   if (!cq) return <Navigate to="/sales/quotation" replace />
 
-  const cust = state.customers.find((c) => c.id === cq.customerId)
+  const cust = (state.customers || []).find((c) => String(c.id) === String(cq.customerId))
   const cr = getCR(state, cq.crId)
-  const qc = state.quotationComparisons.find((x) => x.id === cq.qcId)
-  const vq = qc ? state.vendorQuotations.find((v) => v.id === qc.selectedVqId) : null
-  const so = state.salesOrders.find((x) => x.cqId === cq.id)
+  const qc = (state.quotationComparisons || []).find((x) => String(x.id) === String(cq.qcId))
+  const vq = qc ? (state.vendorQuotations || []).find((v) => String(v.id) === String(qc.selectedVqId)) : null
+  const so = (state.salesOrders || []).find((x) => String(x.cqId) === String(cq.id))
 
   const subtotal = round2(sum(cq.lines, (l) => l.qty * l.customerPrice))
   const tax = round2(sum(cq.lines, (l) => (l.qty * l.customerPrice * (l.taxPct || 0)) / 100))

@@ -12,14 +12,14 @@ export default function GRNView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const g = s.grns.find((x) => x.id === id)
+  const g = (s.grns || []).find((x) => String(x.id) === String(id))
   useDocLabel(g ? g.grnNo : null)
   if (!g) return <Navigate to="/purchase/grn" replace />
 
-  const po = s.purchaseOrders.find((x) => x.id === g.poId)
+  const po = (s.purchaseOrders || []).find((x) => String(x.id) === String(g.poId))
   const cr = getCR(s, g.crId)
-  const inw = s.inwards.find((x) => x.grnId === g.id)
-  const pi = s.purchaseInvoices.find((x) => x.grnId === g.id)
+  const inw = (s.inwards || []).find((x) => String(x.grnId) === String(g.id))
+  const pi = (s.purchaseInvoices || []).find((x) => String(x.grnId) === String(g.id))
 
   return (
     <div>

@@ -11,13 +11,13 @@ export default function PurchaseInvoiceView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const pi = s.purchaseInvoices.find((x) => x.id === id)
+  const pi = (s.purchaseInvoices || []).find((x) => String(x.id) === String(id))
   useDocLabel(pi ? pi.piNo : null)
   if (!pi) return <Navigate to="/purchase/invoice" replace />
 
-  const sup = s.suppliers.find((c) => c.id === pi.supplierId)
-  const po = s.purchaseOrders.find((x) => x.id === pi.poId)
-  const grn = s.grns.find((x) => x.id === pi.grnId)
+  const sup = (s.suppliers || []).find((c) => String(c.id) === String(pi.supplierId))
+  const po = (s.purchaseOrders || []).find((x) => String(x.id) === String(pi.poId))
+  const grn = (s.grns || []).find((x) => String(x.id) === String(pi.grnId))
   const cr = getCR(s, pi.crId)
 
   return (

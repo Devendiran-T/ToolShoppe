@@ -58,7 +58,9 @@ export default function DataTable({
     filters.forEach((f) => {
       const v = sel[f.key]
       if (v === undefined || v === null || v === '') return
-      out = out.filter((r) => (f.match ? f.match(r, v) : r[f.key] === v))
+      out = out.filter((r) =>
+        f.match ? f.match(r, v) : r[f.key] === v || (r[f.key] != null && v != null && String(r[f.key]) === String(v))
+      )
     })
     if (showRange && range && range[0] && range[1]) {
       out = out.filter((r) => {

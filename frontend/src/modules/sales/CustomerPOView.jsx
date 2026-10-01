@@ -14,15 +14,15 @@ export default function CustomerPOView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const so = s.salesOrders.find((x) => x.id === id)
+  const so = (s.salesOrders || []).find((x) => String(x.id) === String(id))
   useDocLabel(so ? so.soNo : null)
   if (!so) return <Navigate to="/sales/customer-po" replace />
 
   const cr = getCR(s, so.crId)
-  const cq = s.customerQuotations.find((x) => x.id === so.cqId)
-  const po = s.purchaseOrders.find((x) => x.soId === so.id)
-  const cust = s.customers.find((c) => c.id === so.customerId)
-  const outs = s.outwards.filter((o) => o.soId === so.id)
+  const cq = (s.customerQuotations || []).find((x) => String(x.id) === String(so.cqId))
+  const po = (s.purchaseOrders || []).find((x) => String(x.soId) === String(so.id))
+  const cust = (s.customers || []).find((c) => String(c.id) === String(so.customerId))
+  const outs = (s.outwards || []).filter((o) => String(o.soId) === String(so.id))
 
   return (
     <div>

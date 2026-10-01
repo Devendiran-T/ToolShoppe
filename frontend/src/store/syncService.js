@@ -9,6 +9,8 @@ import {
   salesApi,
   purchaseApi,
 } from '../api/endpoints.js'
+import { derive } from './reducer.js'
+import { computeBest } from '../logic/compare.js'
 
 export function mapBackendToFrontend(bData, fallback) {
   if (!bData) return fallback
@@ -82,6 +84,7 @@ export function mapBackendToFrontend(bData, fallback) {
       customerId: cr.customer_id || cr.customerId,
       requiredBy: cr.required_date || cr.requiredBy,
       reference: cr.customer_reference || cr.reference || '',
+      remarks: cr.remarks || '',
       stage: cr.status || cr.stage || 'Requested',
       lines: (cr.lines || []).map((l) => ({
         itemId: l.item_id || l.itemId,
@@ -92,7 +95,309 @@ export function mapBackendToFrontend(bData, fallback) {
     }))
   }
 
-  // 5. Email Logs
+  // 5. Purchase Requests (PR)
+  if (Array.isArray(bData.purchaseRequests) && bData.purchaseRequests.length > 0) {
+    s.purchaseRequests = bData.purchaseRequests.map((pr) => {
+      const cr = s.customerRequests.find((c) => c.id === (pr.customer_request_id || pr.crId))
+      return {
+        id: pr.id,
+        prNo: pr.pr_no || pr.prNo || `PR-${pr.id}`,
+        date: (pr.created_at || '').slice(0, 10) || pr.date,
+        crId: pr.customer_request_id || pr.crId,
+        customerId: pr.customer_id || (cr ? cr.customerId : null),
+        rfqSupplierIds: pr.rfq_supplier_ids || pr.rfqSupplierIds || [],
+        rfqSentAt: pr.rfq_sent_at || pr.rfqSentAt || null,
+        status: pr.status || 'Open',
+        lines: (pr.items || pr.lines || (cr ? cr.lines : [])).map((l) => ({
+          itemId: l.item_id || l.itemId,
+          qty: Number(l.quantity ?? l.qty ?? 1),
+          unit: l.unit || 'Nos',
+        })),
+      }
+    })
+  }
+
+  // 6. Vendor Quotations (VQ)
+  if (Array.isArray(bData.vendorQuotations) && bData.vendorQuotations.length > 0) {
+    s.vendorQuotations = bData.vendorQuotations.map((vq) => ({
+      id: vq.id,
+      vqNo: vq.quote_reference || vq.quotation_no || vq.vqNo || `VQ-${vq.id}`,
+      date: vq.quote_date || (vq.created_at || '').slice(0, 10) || vq.date,
+      prId: vq.purchase_request_id || vq.prId,
+      supplierId: vq.supplier_id || vq.supplierId,
+      quoteRef: vq.quote_reference || vq.quoteRef || '',
+      validTill: vq.validity || vq.validTill,
+      deliveryDays: Number(vq.delivery_days ?? vq.deliveryDays ?? 0),
+      paymentTerms: vq.payment_terms || vq.paymentTerms || '',
+      freight: Number(vq.freight ?? 0),
+      grandTotal: Number(vq.grand_total ?? vq.grandTotal ?? 0),
+      status: vq.status || 'Received',
+      lines: (vq.lines || []).map((l) => ({
+        itemId: l.item_id || l.itemId,
+        qty: Number(l.quantity ?? l.qty ?? 1),
+        rate: Number(l.rate ?? 0),
+        taxPct: Number(l.tax_percent ?? l.taxPct ?? 18),
+        notQuoted: Boolean(l.not_quoted ?? l.notQuoted),
+      })),
+    }))
+  }
+
+  // 7. Quotation Comparisons (QC)
+  const qcMap = new Map()
+  ;(fallback.quotationComparisons || []).forEach((q) => qcMap.set(q.prId, q))
+  s.purchaseRequests.forEach((pr) => {
+    const vqs = s.vendorQuotations.filter((v) => v.prId === pr.id)
+    if (vqs.length > 0) {
+      const existing = qcMap.get(pr.id)
+      const bestId = computeBest(vqs, pr.lines)
+      const selectedVq = vqs.find((v) => v.status === 'Selected')
+      const isApproved = pr.status === 'Quoted' || pr.status === 'Ordered' || !!selectedVq
+      qcMap.set(pr.id, {
+        id: existing?.id || pr.id,
+        qcNo: existing?.qcNo || `QC-${String(pr.id).padStart(3, '0')}`,
+        date: existing?.date || pr.date,
+        prId: pr.id,
+        crId: pr.crId,
+        vqIds: vqs.map((v) => v.id),
+        bestVqId: existing?.bestVqId || bestId,
+        selectedVqId: selectedVq ? selectedVq.id : (existing?.selectedVqId || (isApproved ? bestId : null)),
+        overrideReason: existing?.overrideReason || '',
+        status: isApproved ? 'Approved' : (existing?.status || 'Draft'),
+      })
+    }
+  })
+  s.quotationComparisons = Array.from(qcMap.values())
+
+  // 8. Customer Quotations (CQ)
+  if (Array.isArray(bData.customerQuotations) && bData.customerQuotations.length > 0) {
+    s.customerQuotations = bData.customerQuotations.map((cq) => ({
+      id: cq.id,
+      cqNo: cq.quotation_no || cq.cqNo || `CQ-${cq.id}`,
+      date: (cq.created_at || '').slice(0, 10) || cq.date,
+      crId: cq.customer_request_id || cq.crId,
+      qcId: cq.comparison_id || cq.qcId,
+      customerId: cq.customer_id || cq.customerId,
+      validTill: cq.valid_till || cq.validTill,
+      lines: (cq.items || cq.lines || []).map((l) => ({
+        itemId: l.item_id || l.itemId,
+        qty: Number(l.quantity ?? l.qty ?? 1),
+        supplierRate: Number(l.supplier_rate ?? l.supplierRate ?? 0),
+        customerPrice: Number(l.customer_price ?? l.customerPrice ?? 0),
+        taxPct: Number(l.tax_percent ?? l.taxPct ?? 18),
+      })),
+      status: cq.status || 'Sent',
+      sentAt: cq.sent_at || cq.sentAt || null,
+      total: Number(cq.grand_total ?? cq.total ?? 0),
+    }))
+  }
+
+  // 9. Customer PO / Sales Orders (SO)
+  if (Array.isArray(bData.salesOrders) && bData.salesOrders.length > 0) {
+    s.salesOrders = bData.salesOrders.map((so) => ({
+      id: so.id,
+      soNo: so.order_no || so.soNo || `SO-${so.id}`,
+      date: (so.created_at || '').slice(0, 10) || so.po_date || so.date,
+      customerPoNo: so.customer_po_number || so.customerPoNo || '',
+      customerPoDate: so.po_date || so.customerPoDate || '',
+      crId: so.customer_request_id || so.crId,
+      cqId: so.quotation_id || so.cqId,
+      customerId: so.customer_id || so.customerId,
+      deliveryDate: so.delivery_date || so.deliveryDate || null,
+      lines: (so.items || so.lines || []).map((l) => ({
+        itemId: l.item_id || l.itemId,
+        qty: Number(l.quantity ?? l.qty ?? 1),
+        price: Number(l.selling_price ?? l.price ?? 0),
+      })),
+      status: so.status || 'Open',
+      total: Number(so.grand_total ?? so.total ?? 0),
+    }))
+  }
+
+  // 10. Supplier Purchase Orders (PO)
+  if (Array.isArray(bData.purchaseOrders) && bData.purchaseOrders.length > 0) {
+    s.purchaseOrders = bData.purchaseOrders.map((po) => ({
+      id: po.id,
+      poNo: po.po_no || po.poNo || `PO-${po.id}`,
+      date: (po.created_at || '').slice(0, 10) || po.date,
+      soId: po.customer_order_id || po.soId,
+      crId: po.customer_request_id || po.crId,
+      vqId: po.quotation_id || po.vqId,
+      supplierId: po.supplier_id || po.supplierId,
+      expectedDelivery: po.delivery_date || po.expectedDelivery,
+      lines: (po.items || po.lines || []).map((l) => ({
+        itemId: l.item_id || l.itemId,
+        qty: Number(l.quantity ?? l.qty ?? 1),
+        rate: Number(l.rate ?? 0),
+        taxPct: Number(l.tax_percent ?? l.taxPct ?? 18),
+        receivedQty: Number(l.received_qty ?? l.receivedQty ?? 0),
+      })),
+      total: Number(po.grand_total ?? po.total ?? 0),
+      status: po.status || 'Draft',
+      sentAt: po.sent_at || po.sentAt || null,
+    }))
+  }
+
+  // 11. Goods Receipt Notes (GRN)
+  if (Array.isArray(bData.grns) && bData.grns.length > 0) {
+    s.grns = bData.grns.map((g) => ({
+      id: g.id,
+      grnNo: g.grn_no || g.grnNo || `GRN-${g.id}`,
+      date: (g.received_date || g.created_at || '').slice(0, 10) || g.date,
+      poId: g.purchase_order_id || g.poId,
+      crId: g.customer_request_id || g.crId,
+      supplierId: g.supplier_id || g.supplierId,
+      supplierRef: g.challan_no || g.supplier_invoice_ref || g.supplierRef || '',
+      receivedBy: g.received_by || g.receivedBy || '',
+      remarks: g.remarks || '',
+      status: g.status || 'Received',
+      lines: (g.items || g.lines || []).map((l) => ({
+        itemId: l.item_id || l.itemId,
+        receivedQty: Number(l.received_qty ?? l.receivedQty ?? 0),
+        acceptedQty: Number(l.accepted_qty ?? l.acceptedQty ?? 0),
+        rejectedQty: Number(l.rejected_qty ?? l.rejectedQty ?? 0),
+        rate: Number(l.rate ?? 0),
+      })),
+      total: Number(g.total ?? 0),
+    }))
+  }
+
+  // 12. Inward Stock
+  if (Array.isArray(bData.inwards) && bData.inwards.length > 0) {
+    s.inwards = bData.inwards.map((inw) => {
+      const linkedGrn = s.grns.find((g) => g.id === (inw.grn_id || inw.grnId))
+      return {
+        id: inw.id,
+        inwNo: inw.inward_no || inw.inwNo || `INW-${inw.id}`,
+        date: (inw.created_at || '').slice(0, 10) || inw.date,
+        grnId: inw.grn_id || inw.grnId,
+        poId: inw.purchase_order_id || inw.poId || (linkedGrn ? linkedGrn.poId : null),
+        crId: inw.customer_request_id || inw.crId,
+        supplierId: inw.supplier_id || (linkedGrn ? linkedGrn.supplierId : null),
+        status: inw.status || 'Pending',
+        addedAt: inw.added_at || inw.addedAt || null,
+        value: Number(inw.total_value ?? inw.value ?? 0),
+        lines: (inw.items || inw.lines || []).map((l) => ({
+          itemId: l.item_id || l.itemId,
+          qty: Number(l.quantity ?? l.qty ?? 0),
+          rate: Number(l.rate ?? 0),
+        })),
+      }
+    })
+  }
+
+  // 13. Outward (Delivery Challan)
+  if (Array.isArray(bData.outwards) && bData.outwards.length > 0) {
+    s.outwards = bData.outwards.map((o) => ({
+      id: o.id,
+      outNo: o.dc_number || o.dc_no || o.outward_no || o.outNo || `OUT-${o.id}`,
+      date: (o.dispatch_date || o.created_at || '').slice(0, 10) || o.date,
+      soId: o.customer_order_id || o.soId,
+      crId: o.customer_request_id || o.crId,
+      customerId: o.customer_id || o.customerId,
+      dcNo: o.dc_number || o.dc_no || '',
+      mode: o.dispatch_mode || o.mode || '',
+      vehicle: o.vehicle_no || o.vehicle_or_courier || o.vehicle || '',
+      remarks: o.remarks || '',
+      status: o.status || 'Dispatched',
+      value: Number(o.total_value ?? o.value ?? 0),
+      lines: (o.items || o.lines || []).map((l) => ({
+        itemId: l.item_id || l.itemId,
+        qty: Number(l.dispatch_qty ?? l.quantity ?? l.qty ?? 0),
+        price: Number(l.selling_price ?? l.price ?? 0),
+      })),
+    }))
+  }
+
+  // 14. Sales Invoices
+  if (Array.isArray(bData.salesInvoices) && bData.salesInvoices.length > 0) {
+    s.salesInvoices = bData.salesInvoices.map((si) => ({
+      id: si.id,
+      siNo: si.invoice_no || si.siNo || `SI-${si.id}`,
+      date: (si.invoice_date || si.created_at || '').slice(0, 10) || si.date,
+      outId: si.outward_id || si.outId,
+      soId: si.customer_order_id || si.soId,
+      crId: si.customer_request_id || si.crId,
+      customerId: si.customer_id || si.customerId,
+      paymentTerms: si.payment_terms || '',
+      dueDate: (si.due_date || '').slice(0, 10) || si.dueDate,
+      subtotal: Number(si.subtotal ?? 0),
+      tax: Number(si.tax_amount ?? si.tax ?? 0),
+      total: Number(si.grand_total ?? si.total ?? 0),
+      status: si.status || 'Final',
+      lines: (si.items || si.lines || []).map((l) => ({
+        itemId: l.item_id || l.itemId,
+        hsn: l.hsn_code || l.hsn || '',
+        qty: Number(l.quantity ?? l.qty ?? 0),
+        rate: Number(l.rate ?? l.price ?? 0),
+        taxable: Number(l.taxable_amount ?? l.taxable ?? 0),
+        taxPct: Number(l.tax_percent ?? l.taxPct ?? 18),
+        taxAmount: Number(l.tax_amount ?? 0),
+        total: Number(l.line_total ?? l.total ?? 0),
+      })),
+    }))
+  }
+
+  // 15. Purchase Invoices
+  if (Array.isArray(bData.purchaseInvoices) && bData.purchaseInvoices.length > 0) {
+    s.purchaseInvoices = bData.purchaseInvoices.map((pi) => {
+      const linkedGrn = s.grns.find((g) => g.id === (pi.grn_id || pi.grnId))
+      return {
+        id: pi.id,
+        piNo: pi.internal_invoice_no || pi.piNo || `PI-${pi.id}`,
+        date: (pi.supplier_invoice_date || pi.created_at || '').slice(0, 10) || pi.date,
+        grnId: pi.grn_id || pi.grnId,
+        poId: linkedGrn ? linkedGrn.poId : null,
+        crId: pi.customer_request_id || pi.crId,
+        supplierId: pi.supplier_id || pi.supplierId,
+        supplierInvNo: pi.supplier_invoice_no || pi.supplierInvNo || '',
+        supplierInvDate: (pi.supplier_invoice_date || '').slice(0, 10) || pi.supplierInvDate,
+        dueDate: (pi.due_date || '').slice(0, 10) || pi.dueDate,
+        subtotal: Number(pi.subtotal ?? 0),
+        tax: Number(pi.tax_amount ?? pi.tax ?? 0),
+        total: Number(pi.grand_total ?? pi.total ?? 0),
+        status: pi.status || 'Verified',
+        lines: (pi.items || pi.lines || []).map((l) => ({
+          itemId: l.item_id || l.itemId,
+          qty: Number(l.quantity ?? l.qty ?? 0),
+          rate: Number(l.rate ?? 0),
+          taxable: Number(l.taxable_amount ?? l.taxable ?? 0),
+          taxPct: Number(l.tax_percent ?? l.taxPct ?? 18),
+          taxAmount: Number(l.tax_amount ?? 0),
+          total: Number(l.line_total ?? l.total ?? 0),
+        })),
+      }
+    })
+  }
+
+  // 16. Stock Ledger
+  if (Array.isArray(bData.ledger) && bData.ledger.length > 0) {
+    s.stockLedger = bData.ledger.map((l) => {
+      const isOut = (l.movement_type || '').toUpperCase() === 'OUT'
+      let partyId = null
+      if (isOut) {
+        const outDoc = s.outwards.find((o) => o.id === l.reference_id || String(o.id) === String(l.reference_id))
+        partyId = outDoc ? outDoc.customerId : null
+      } else {
+        const inwDoc = s.inwards.find((i) => i.id === l.reference_id || String(i.id) === String(l.reference_id))
+        partyId = inwDoc ? inwDoc.supplierId : null
+      }
+      return {
+        id: l.id,
+        date: (l.created_at || '').slice(0, 10),
+        type: (l.movement_type || '').toUpperCase(),
+        itemId: l.item_id,
+        crId: l.customer_request_id,
+        qty: Number(l.quantity || 0),
+        rate: Number(l.rate || 0),
+        value: Number(l.quantity || 0) * Number(l.rate || 0),
+        refType: l.reference_type,
+        refId: l.reference_id,
+        partyId,
+      }
+    })
+  }
+
+  // 17. Email Logs
   if (Array.isArray(bData.emailLog) && bData.emailLog.length > 0) {
     s.emailLog = bData.emailLog.map((em) => {
       let refType = 'PR'
@@ -122,7 +427,7 @@ export function mapBackendToFrontend(bData, fallback) {
     })
   }
 
-  return s
+  return derive(s)
 }
 
 /**
@@ -284,14 +589,31 @@ export async function syncActionToBackend(action, state) {
       /* Purchase - 04. Quotation Comparison Approval */
       case 'QC_APPROVE': {
         const { qcId, selectedVqId, overrideReason } = action
-        const qc = state.quotationComparisons.find((q) => q.id === qcId)
-        if (qc && typeof qc.prId === 'number') {
-          const vq = state.vendorQuotations.find((v) => v.id === selectedVqId)
-          if (vq) {
-            await purchaseApi.approveComparison(qc.prId, {
-              selected_supplier_id: vq.supplierId,
+        const qc = state.quotationComparisons.find((q) => q.id === qcId || String(q.id) === String(qcId))
+        const prIdNum = qc && !isNaN(Number(qc.prId)) ? Number(qc.prId) : null
+        if (qc && prIdNum) {
+          const vq = state.vendorQuotations.find((v) => v.id === selectedVqId || String(v.id) === String(selectedVqId))
+          const supIdNum = vq && !isNaN(Number(vq.supplierId)) ? Number(vq.supplierId) : null
+          if (supIdNum) {
+            await purchaseApi.approveComparison(prIdNum, {
+              selected_supplier_id: supIdNum,
               override_reason: overrideReason || undefined,
             })
+          }
+        }
+        break
+      }
+
+      /* Purchase - 04b. Send Quotation to Customer (Auto CQ) */
+      case 'QC_SEND_TO_CUSTOMER': {
+        const { qcId } = action
+        const qc = state.quotationComparisons.find((q) => q.id === qcId || String(q.id) === String(qcId))
+        const compIdNum = qc && !isNaN(Number(qc.id)) ? Number(qc.id) : (qc && !isNaN(Number(qc.prId)) ? Number(qc.prId) : null)
+        if (compIdNum) {
+          try {
+            await salesApi.createQuotationFromComparison(compIdNum)
+          } catch (e) {
+            // fallback gracefully - local reducer already created client quotation
           }
         }
         break
@@ -300,9 +622,10 @@ export async function syncActionToBackend(action, state) {
       /* Sales - 05. Customer Quotation Status */
       case 'CQ_SET_STATUS': {
         const { cqId, status } = action
-        if (typeof cqId === 'number') {
-          if (status === 'Accepted') await salesApi.acceptCustomerQuotation(cqId)
-          if (status === 'Rejected') await salesApi.rejectCustomerQuotation(cqId)
+        const numId = !isNaN(Number(cqId)) ? Number(cqId) : null
+        if (numId) {
+          if (status === 'Accepted') await salesApi.acceptCustomerQuotation(numId)
+          if (status === 'Rejected') await salesApi.rejectCustomerQuotation(numId)
         }
         break
       }
@@ -310,14 +633,15 @@ export async function syncActionToBackend(action, state) {
       /* Sales - 06. Customer Order (SO) */
       case 'SO_CREATE': {
         const { payload } = action
-        if (typeof payload.cqId === 'number') {
+        const numCqId = !isNaN(Number(payload.cqId)) ? Number(payload.cqId) : null
+        if (numCqId) {
           await salesApi.createCustomerOrder({
-            quotation_id: payload.cqId,
+            quotation_id: numCqId,
             customer_po_number: payload.customerPoNo,
             po_date: payload.customerPoDate,
             delivery_date: payload.deliveryDate,
             items: (payload.lines || []).map((l) => ({
-              item_id: l.itemId,
+              item_id: !isNaN(Number(l.itemId)) ? Number(l.itemId) : l.itemId,
               quantity: Number(l.qty || 1),
               selling_price: Number(l.price || 0),
             })),

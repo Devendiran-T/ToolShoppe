@@ -44,6 +44,7 @@ export const salesApi = {
   // 05. Customer Quotation
   getCustomerQuotations: (params) => api.get('/api/v1/sales/quotation', { params }),
   getCustomerQuotationById: (id) => api.get(`/api/v1/sales/quotation/${id}`),
+  createQuotationFromComparison: (comparisonId) => api.post(`/api/v1/sales/quotation/create-from-comparison/${comparisonId}`),
   updateCustomerQuotation: (id, data) => api.put(`/api/v1/sales/quotation/${id}`, data),
   sendCustomerQuotation: (data) => api.post('/api/v1/sales/quotation/send', data),
   acceptCustomerQuotation: (id) => api.patch(`/api/v1/sales/quotation/${id}/accept`),
@@ -132,6 +133,7 @@ export async function fetchAllBackendData() {
     piRes,
     invRes,
     emailRes,
+    ledgerRes,
   ] = await Promise.allSettled([
     mastersApi.getCustomers({ limit: 500 }),
     mastersApi.getSuppliers({ limit: 500 }),
@@ -149,6 +151,7 @@ export async function fetchAllBackendData() {
     purchaseApi.getPurchaseInvoices({ limit: 500 }),
     analyticsApi.getInventorySummary(),
     analyticsApi.getEmailLogs({ limit: 100 }),
+    analyticsApi.getStockLedger(),
   ])
 
   const unbox = (res) => {
@@ -180,5 +183,7 @@ export async function fetchAllBackendData() {
     purchaseInvoices: unbox(piRes),
     inventory: unbox(invRes),
     emailLog: unbox(emailRes),
+    ledger: unbox(ledgerRes),
   }
 }
+

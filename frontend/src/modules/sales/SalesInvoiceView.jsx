@@ -11,13 +11,13 @@ export default function SalesInvoiceView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const si = s.salesInvoices.find((x) => x.id === id)
+  const si = (s.salesInvoices || []).find((x) => String(x.id) === String(id))
   useDocLabel(si ? si.siNo : null)
   if (!si) return <Navigate to="/sales/invoice" replace />
 
-  const cust = s.customers.find((c) => c.id === si.customerId)
-  const so = s.salesOrders.find((x) => x.id === si.soId)
-  const out = s.outwards.find((x) => x.id === si.outId)
+  const cust = (s.customers || []).find((c) => String(c.id) === String(si.customerId))
+  const so = (s.salesOrders || []).find((x) => String(x.id) === String(si.soId))
+  const out = (s.outwards || []).find((x) => String(x.id) === String(si.outId))
   const cr = getCR(s, si.crId)
 
   return (

@@ -12,14 +12,14 @@ export default function OutwardView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const o = s.outwards.find((x) => x.id === id)
+  const o = (s.outwards || []).find((x) => String(x.id) === String(id))
   useDocLabel(o ? o.outNo : null)
   if (!o) return <Navigate to="/sales/outward" replace />
 
-  const so = s.salesOrders.find((x) => x.id === o.soId)
+  const so = (s.salesOrders || []).find((x) => String(x.id) === String(o.soId))
   const cr = getCR(s, o.crId)
-  const cust = s.customers.find((c) => c.id === o.customerId)
-  const si = s.salesInvoices.find((x) => x.outId === o.id)
+  const cust = (s.customers || []).find((c) => String(c.id) === String(o.customerId))
+  const si = (s.salesInvoices || []).find((x) => String(x.outId) === String(o.id))
 
   return (
     <div>

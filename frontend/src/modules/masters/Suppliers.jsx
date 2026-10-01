@@ -25,6 +25,10 @@ export default function Suppliers() {
   const save = () => {
     if (!draft.name.trim()) return toast.warning('Please enter the supplier name.')
     if (!/^\S+@\S+\.\S+$/.test(draft.email || '')) return toast.warning('Please enter a valid email address.')
+    const isDup = (state.suppliers || []).some(
+      (s) => s.name && s.name.trim().toLowerCase() === draft.name.trim().toLowerCase() && String(s.id) !== String(draft.id)
+    )
+    if (isDup) return toast.warning(`A supplier named "${draft.name.trim()}" already exists.`)
     dispatch({ type: 'MASTER_SAVE', collection: 'suppliers', codeType: 'SUP', record: draft })
     toast.success(draft.id ? 'Supplier updated successfully.' : 'Supplier created successfully.')
     setDraft(null)

@@ -27,6 +27,10 @@ export default function Items() {
   const save = () => {
     if (!draft.name.trim()) return toast.warning('Please enter the item name.')
     if (!draft.category) return toast.warning('Please choose a category.')
+    const isDup = (state.items || []).some(
+      (i) => i.name && i.name.trim().toLowerCase() === draft.name.trim().toLowerCase() && String(i.id) !== String(draft.id)
+    )
+    if (isDup) return toast.warning(`An item named "${draft.name.trim()}" already exists.`)
     dispatch({ type: 'MASTER_SAVE', collection: 'items', codeType: 'ITM', record: draft })
     toast.success(draft.id ? 'Item updated successfully.' : 'Item created successfully.')
     setDraft(null)

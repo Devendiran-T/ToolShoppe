@@ -12,16 +12,16 @@ export default function PurchaseOrderView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const po = s.purchaseOrders.find((x) => x.id === id)
+  const po = (s.purchaseOrders || []).find((x) => String(x.id) === String(id))
   useDocLabel(po ? po.poNo : null)
   if (!po) return <Navigate to="/purchase/purchase-order" replace />
 
   const cr = getCR(s, po.crId)
-  const so = s.salesOrders.find((x) => x.id === po.soId)
-  const vq = s.vendorQuotations.find((v) => v.id === po.vqId)
-  const sup = s.suppliers.find((x) => x.id === po.supplierId)
-  const grns = s.grns.filter((g) => g.poId === po.id)
-  const pis = s.purchaseInvoices.filter((p) => p.poId === po.id)
+  const so = (s.salesOrders || []).find((x) => String(x.id) === String(po.soId))
+  const vq = (s.vendorQuotations || []).find((v) => String(v.id) === String(po.vqId))
+  const sup = (s.suppliers || []).find((x) => String(x.id) === String(po.supplierId))
+  const grns = (s.grns || []).filter((g) => String(g.poId) === String(po.id))
+  const pis = (s.purchaseInvoices || []).filter((p) => String(p.poId) === String(po.id))
 
   const ordered = po.lines.reduce((a, l) => a + l.qty, 0)
   const received = po.lines.reduce((a, l) => a + (l.receivedQty || 0), 0)

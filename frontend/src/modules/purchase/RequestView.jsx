@@ -13,13 +13,13 @@ export default function RequestView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const pr = s.purchaseRequests.find((x) => x.id === id)
+  const pr = (s.purchaseRequests || []).find((x) => String(x.id) === String(id))
   useDocLabel(pr ? pr.prNo : null)
   if (!pr) return <Navigate to="/purchase/request" replace />
 
   const cr = getCR(s, pr.crId)
-  const vqs = s.vendorQuotations.filter((v) => v.prId === pr.id)
-  const asked = s.suppliers.filter((x) => (pr.rfqSupplierIds || []).includes(x.id))
+  const vqs = (s.vendorQuotations || []).filter((v) => String(v.prId) === String(pr.id))
+  const asked = (s.suppliers || []).filter((x) => (pr.rfqSupplierIds || []).map(String).includes(String(x.id)))
 
   return (
     <div>

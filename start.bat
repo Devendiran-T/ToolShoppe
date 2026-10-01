@@ -13,7 +13,7 @@ if exist ".venv\Scripts\activate.bat" (
 )
 
 echo [2/3] Starting FastAPI backend on http://localhost:8000 ...
-start "ToolShoppe Backend (Port 8000)" cmd /k "cd /d "%~dp0backend" && python -m uvicorn app.main:app --reload --port 8000"
+start "ToolShoppe Backend (Port 8000)" cmd /k "cd /d "%~dp0backend" && "%~dp0.venv\Scripts\python.exe" -m uvicorn app.main:app --reload --port 8000"
 
 echo [3/3] Starting Frontend on http://localhost:5173 ...
 start "ToolShoppe Frontend (Port 5173)" cmd /k "cd /d "%~dp0frontend" && npm run dev"

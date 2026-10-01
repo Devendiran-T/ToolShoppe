@@ -24,6 +24,10 @@ export default function Customers() {
   const save = () => {
     if (!draft.name.trim()) return toast.warning('Please enter the customer name.')
     if (!/^\S+@\S+\.\S+$/.test(draft.email || '')) return toast.warning('Please enter a valid email address.')
+    const isDup = (state.customers || []).some(
+      (c) => c.name && c.name.trim().toLowerCase() === draft.name.trim().toLowerCase() && String(c.id) !== String(draft.id)
+    )
+    if (isDup) return toast.warning(`A customer named "${draft.name.trim()}" already exists.`)
     dispatch({ type: 'MASTER_SAVE', collection: 'customers', codeType: 'CUS', record: draft })
     toast.success(draft.id ? 'Customer updated successfully.' : 'Customer created successfully.')
     setDraft(null)

@@ -7,7 +7,8 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 # 1. Start Backend
 Write-Host "`n[1/2] Starting FastAPI Backend on port 8000..." -ForegroundColor Yellow
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$Root\backend'; python -m uvicorn app.main:app --reload --port 8000"
+$PythonCmd = if (Test-Path "$Root\.venv\Scripts\python.exe") { "& '$Root\.venv\Scripts\python.exe'" } else { "python" }
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$Root\backend'; $PythonCmd -m uvicorn app.main:app --reload --port 8000"
 
 # 2. Start Frontend
 Write-Host "[2/2] Starting Frontend on port 5173..." -ForegroundColor Yellow
