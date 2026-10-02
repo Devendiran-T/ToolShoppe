@@ -24,31 +24,41 @@ export const CR_STAGES = [
 ]
 
 export function deriveCrStage(s, crId) {
+  if (!s || !crId) return 'Requested'
   const eq = (a, b) => a === b || (a != null && b != null && String(a) === String(b))
-  const si = s.salesInvoices.some((x) => eq(x.crId, crId))
-  const pi = s.purchaseInvoices.some((x) => eq(x.crId, crId))
+  const si = (s.salesInvoices || []).some((x) => x && eq(x.crId, crId))
+  const pi = (s.purchaseInvoices || []).some((x) => x && eq(x.crId, crId))
   if (si && pi) return 'Completed'
   if (si || pi) return 'Invoiced'
-  if (s.outwards.some((x) => eq(x.crId, crId))) return 'Dispatched'
-  if (s.inwards.some((x) => eq(x.crId, crId) && x.status === 'Added')) return 'Stock In'
-  if (s.salesOrders.some((x) => eq(x.crId, crId))) return 'PO Received'
-  if (s.customerQuotations.some((x) => eq(x.crId, crId))) return 'Quoted'
-  const pr = s.purchaseRequests.find((x) => eq(x.crId, crId))
+  if ((s.outwards || []).some((x) => x && eq(x.crId, crId))) return 'Dispatched'
+  if ((s.inwards || []).some((x) => x && eq(x.crId, crId) && x.status === 'Added')) return 'Stock In'
+  if ((s.salesOrders || []).some((x) => x && eq(x.crId, crId))) return 'PO Received'
+  if ((s.customerQuotations || []).some((x) => x && eq(x.crId, crId))) return 'Quoted'
+  const pr = (s.purchaseRequests || []).find((x) => x && eq(x.crId, crId))
   if (pr && pr.rfqSentAt) return 'RFQ Sent'
   return 'Requested'
 }
 
 export function derive(s) {
-  s.customerRequests.forEach((cr) => { cr.stage = deriveCrStage(s, cr.id) })
+  if (!s || !Array.isArray(s.customerRequests)) return s
+  s.customerRequests.forEach((cr) => {
+    if (cr && cr.id) {
+      cr.stage = deriveCrStage(s, cr.id)
+    }
+  })
   return s
 }
 
-const logEmail = (s, { to, subject, body, refType, refId }) => {
+const logEmail = (s, { from = 'tdevendiran123@gmail.com', to, subject, body, refType, refId }) => {
   s.emailLog.unshift({
     id: uid('eml'),
     sentAt: new Date().toISOString(),
+    from: from || 'tdevendiran123@gmail.com',
     to: Array.isArray(to) ? to : [to],
-    subject, body, refType, refId,
+    subject,
+    body,
+    refType,
+    refId,
   })
 }
 
@@ -622,6 +632,30 @@ export function reducer(state, action) {
       s.salesInvoices.unshift(si)
       out.status = 'Invoiced'
       if (so) so.status = 'Invoiced'
+      return derive(s)
+    }
+
+    case 'SI_RECORD_PAYMENT': {
+      const p = action.payload
+      const si = find(s.salesInvoices, p.id)
+      if (!si) return state
+      si.payments = si.payments || []
+      const paidAmt = Number(p.amount) || Number(si.total)
+      si.payments.push({
+        id: uid('pay'),
+        date: p.paymentDate || today(),
+        mode: p.paymentMode || 'NEFT',
+        refNo: p.refNo || '',
+        amount: paidAmt,
+        remarks: p.remarks || '',
+      })
+      const totalPaid = sum(si.payments, (x) => x.amount)
+      si.paidAmount = totalPaid
+      if (totalPaid >= Number(si.total)) {
+        si.status = 'Paid'
+      } else if (totalPaid > 0) {
+        si.status = 'Partially Paid'
+      }
       return derive(s)
     }
 

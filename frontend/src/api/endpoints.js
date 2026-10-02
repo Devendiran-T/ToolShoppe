@@ -187,3 +187,7 @@ export async function fetchAllBackendData() {
   }
 }
 
+export const emailApi = {
+  sendLiveEmail: (data) => api.post('/api/v1/email-logs/send-live', data),
+}
+

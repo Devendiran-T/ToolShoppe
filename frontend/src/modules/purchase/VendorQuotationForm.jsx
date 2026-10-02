@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Select, Input, InputNumber, Checkbox, Table, Alert, Row, Col } from 'antd'
-import { Save, Lock, FileText, Building2 } from 'lucide-react'
+import { Save, Lock, FileText, Building2, Mail } from 'lucide-react'
 import { useApp } from '../../store/AppContext.jsx'
 import { itemName, itemCode, getCR, customerName } from '../../store/selectors.js'
 import { round2 } from '../../logic/pricing.js'
@@ -10,8 +10,10 @@ import { today, addDays } from '../../store/reducer.js'
 import { useDocLabel } from '../../app/docLabel.jsx'
 import {
   PageHeader, DocHeader, Card, Grid, Btn, Field, FormSection, Money, Qty, Pct,
-  DateField, useToast,
+  DateField, useToast, EmailPopup,
 } from '../../components/ui/index.js'
+import { emailApi } from '../../api/endpoints.js'
+
 
 export default function VendorQuotationForm() {
   const { id } = useParams()
@@ -75,6 +77,9 @@ export default function VendorQuotationForm() {
   const totals = vqTotals(draft)
   const complete = pr ? isComplete(draft, pr.lines) : false
 
+  const [emailOpen, setEmailOpen] = useState(false)
+  const supplier = (state.suppliers || []).find((s) => s.id === draft.supplierId)
+
   const save = () => {
     if (!draft.prId) return toast.warning('Please select the purchase request.')
     if (!draft.supplierId) return toast.warning('Please select the supplier.')
@@ -83,6 +88,33 @@ export default function VendorQuotationForm() {
     toast.success(existing ? 'Quotation updated successfully.' : 'Vendor quotation saved.')
     nav('/purchase/vendor-quotation')
   }
+
+  const handleSendEmail = async ({ subject, body }) => {
+    const targetEmail = supplier?.email || 'tdevendirandevdevidtamil@gmail.com'
+    try {
+      await emailApi.sendLiveEmail({
+        recipient: targetEmail,
+        subject,
+        body,
+        document_type: 'Vendor Quotation',
+      })
+      toast.success(`Quotation copy dispatched live to ${targetEmail}!`)
+    } catch (e) {
+      toast.error('Failed to send email: ' + (e.message || e))
+    }
+    setEmailOpen(false)
+  }
+
+  const emailBtn = (
+    <Btn
+      variant="secondary"
+      icon={Mail}
+      disabled={!draft.supplierId}
+      onClick={() => setEmailOpen(true)}
+    >
+      Email Quotation Copy
+    </Btn>
+  )
 
   const saveBtn = !locked && (
     <Btn variant="primary" icon={Save} onClick={save}>
@@ -98,17 +130,23 @@ export default function VendorQuotationForm() {
           docNo={existing.vqNo}
           status={existing.status}
           backTo="/purchase/vendor-quotation"
-          actions={saveBtn}
+          actions={
+            <div style={{ display: 'flex', gap: 8 }}>
+              {emailBtn}
+              {saveBtn}
+            </div>
+          }
         />
       ) : (
         <PageHeader
           title="New vendor quotation"
           subtitle="Record what the supplier quoted. The linked customer request is shown read-only."
           actions={
-            <>
+            <div style={{ display: 'flex', gap: 8 }}>
               <Btn variant="secondary" onClick={() => nav('/purchase/vendor-quotation')}>Cancel</Btn>
+              {emailBtn}
               {saveBtn}
-            </>
+            </div>
           }
         />
       )}
@@ -278,6 +316,40 @@ export default function VendorQuotationForm() {
           </div>
         )}
       </Card>
+
+      <EmailPopup
+        open={emailOpen}
+        title={`Email Vendor Quotation — ${existing ? existing.vqNo : 'Draft'}`}
+        okText="Send Live Email"
+        recipients={supplier?.email ? [supplier.email] : ['tdevendirandevdevidtamil@gmail.com']}
+        defaultSubject={`Vendor Quotation Details - Ref ${existing?.vqNo || 'VQ-DRAFT'} (${pr?.prNo || ''})`}
+        defaultBody={`Dear Sir / Madam,
+
+Here are the details of the Vendor Quotation recorded in ToolShoppe ERP:
+
+Supplier: ${supplier?.name || 'Supplier'}
+Quote Reference: ${draft.quoteRef || '—'}
+Quote Date: ${draft.quoteDate}
+Delivery Period: ${draft.deliveryDays} Days
+Payment Terms: ${draft.paymentTerms}
+
+Pricing Breakdown:
+- Subtotal (Taxable): ₹ ${totals.subtotal}
+- GST Tax Amount: ₹ ${totals.tax}
+- Freight / Other: ₹ ${totals.freight}
+- Grand Total: ₹ ${totals.grandTotal}
+
+Remarks:
+This quotation has been officially logged in ToolShoppe ERP for Purchase Comparison.
+
+Regards,
+Purchase & Sourcing Department
+ToolShoppe Industrial Supply Pvt. Ltd.
+tdevendiran123@gmail.com`}
+        onCancel={() => setEmailOpen(false)}
+        onSend={handleSendEmail}
+      />
     </div>
   )
 }
+

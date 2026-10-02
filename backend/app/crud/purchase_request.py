@@ -8,6 +8,7 @@ from app.models.supplier import Supplier
 from app.models.email_log import EmailLog
 from app.schemas.customer_request import CustomerRequestItemOut
 from app.schemas.purchase_request import PurchaseRequestOut, RFQSendRequest
+from app.core.email import send_live_email
 
 
 def format_pr_out(pr: PurchaseRequest) -> PurchaseRequestOut:
@@ -125,6 +126,14 @@ def send_rfq(
         )
         db.add(log)
         created_logs.append(log)
+
+        # Dispatch real email via Gmail SMTP
+        if supplier.email:
+            send_live_email(
+                recipients=supplier.email,
+                subject=rfq_data.subject,
+                body=rfq_data.body,
+            )
 
     # Update PR status
     if pr.status == "Open":

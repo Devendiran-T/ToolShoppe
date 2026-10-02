@@ -32,5 +32,14 @@ class Settings:
     except Exception:
         CORS_ORIGINS: List[str] = [origin.strip() for origin in _cors_raw.split(",") if origin.strip()]
 
+    # Email SMTP Configuration
+    SMTP_ENABLED: bool = os.getenv("SMTP_ENABLED", "True").lower() in ("true", "1", "yes")
+    SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+    SMTP_USER: str = os.getenv("SMTP_USER", "tdevendiran123@gmail.com")
+    SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "ToolShoppe Industrial Supply")
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "tdevendiran123@gmail.com")
+
 
 settings = Settings()

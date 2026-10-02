@@ -238,7 +238,7 @@ export default function QuotationView() {
         defaultSubject={`Quotation ${cq.cqNo} — ${cr ? cr.reference || cr.crNo : ''}`}
         defaultBody={`Dear Sir,\n\nPlease find our quotation ${cq.cqNo} dated ${fmtDate(cq.date)}, valid till ${fmtDate(
           cq.validTill
-        )}. Total value ${inr(subtotal)} (excluding GST).\n\nRegards,\nToolsphoppe`}
+        )}. Total value ${inr(subtotal)} (excluding GST).\n\nRegards,\nSales & Sourcing Department\nToolShoppe Industrial Supply Pvt. Ltd.\ntdevendiran123@gmail.com`}
         onCancel={() => setResend(false)}
         onSend={({ subject, body }) => {
           dispatch({ type: 'CQ_RESEND', cqId: cq.id, subject, body })

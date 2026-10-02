@@ -25,21 +25,25 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('Unhandled app error:', error, errorInfo)
+    this.setState({ errorInfo })
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 40, maxWidth: 600, margin: '60px auto', fontFamily: 'system-ui, sans-serif', background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
+        <div style={{ padding: 40, maxWidth: 800, margin: '40px auto', fontFamily: 'system-ui, sans-serif', background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.05)' }}>
           <h2 style={{ color: '#dc2626', marginTop: 0 }}>Something went wrong</h2>
           <p style={{ color: '#475569' }}>An unexpected error occurred while rendering the page.</p>
-          <pre style={{ background: '#f8fafc', padding: 12, borderRadius: 8, fontSize: 12, overflowX: 'auto', color: '#1e293b' }}>
+          <pre style={{ background: '#f8fafc', padding: 12, borderRadius: 8, fontSize: 12, overflowX: 'auto', color: '#1e293b', maxHeight: 300 }}>
             {this.state.error?.message || String(this.state.error)}
+            {'\n\n'}
+            {this.state.error?.stack}
+            {this.state.errorInfo?.componentStack ? '\n\nComponent Stack:' + this.state.errorInfo.componentStack : ''}
           </pre>
           <div style={{ marginTop: 20, display: 'flex', gap: 12 }}>
             <button
               onClick={() => {
-                localStorage.removeItem('tools-supplier-prototype-v1')
+                localStorage.clear()
                 window.location.reload()
               }}
               style={{ padding: '8px 16px', background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600 }}

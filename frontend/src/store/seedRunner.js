@@ -416,8 +416,9 @@ export function rfqBody(s, pr) {
     'Please confirm unit rate, GST, delivery period and validity.',
     '',
     'Regards,',
-    'Purchase Department',
-    'Toolsphoppe',
+    'Purchase & Sourcing Department',
+    'ToolShoppe Industrial Supply Pvt. Ltd.',
+    'tdevendiran123@gmail.com',
   ]
     .filter(Boolean)
     .join('\n')
@@ -442,7 +443,8 @@ export function poBody(s, po) {
     'Kindly acknowledge receipt of this order.',
     '',
     'Regards,',
-    'Purchase Department',
-    'Toolsphoppe',
+    'Purchase & Sourcing Department',
+    'ToolShoppe Industrial Supply Pvt. Ltd.',
+    'tdevendiran123@gmail.com',
   ].join('\n')
 }

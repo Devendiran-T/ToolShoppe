@@ -1,4 +1,5 @@
 from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -47,6 +48,28 @@ def list_email_logs(
 
 
 @router.get(
+    "/inbox",
+    summary="Fetch Recent Incoming Emails / Supplier Replies via IMAP",
+)
+@api_alias_router.get(
+    "/inbox",
+    summary="Fetch Recent Incoming Emails / Supplier Replies via IMAP",
+)
+def get_inbox_emails(
+    limit: int = Query(15, ge=1, le=50),
+    current_user: User = Depends(get_current_user),
+):
+    from app.core.email import fetch_inbox_messages
+
+    messages = fetch_inbox_messages(limit=limit)
+    return SuccessResponse(
+        success=True,
+        message=f"Fetched {len(messages)} recent messages from inbox.",
+        data=messages,
+    )
+
+
+@router.get(
     "/{id}",
     response_model=SuccessResponse[EmailLogOut],
     summary="Get Single Email Log by ID",
@@ -73,3 +96,50 @@ def get_email_log(
         message="Email log retrieved successfully.",
         data=EmailLogOut.model_validate(log),
     )
+
+
+class SendEmailDirectRequest(BaseModel):
+    recipient: str
+    subject: str
+    body: str
+    document_type: Optional[str] = "General"
+    document_id: Optional[int] = 0
+
+
+@router.post(
+    "/send-live",
+    response_model=SuccessResponse[EmailLogOut],
+    summary="Send Real Email via Gmail SMTP",
+)
+@api_alias_router.post(
+    "/send-live",
+    response_model=SuccessResponse[EmailLogOut],
+    summary="Send Real Email via Gmail SMTP",
+)
+def send_live_email_endpoint(
+    req: SendEmailDirectRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    from app.core.email import send_live_email
+
+    delivered = send_live_email(recipients=req.recipient, subject=req.subject, body=req.body)
+    log = EmailLog(
+        document_type=req.document_type or "General",
+        document_id=req.document_id or 0,
+        recipient=req.recipient,
+        subject=req.subject,
+        body=req.body,
+        status="Sent" if delivered else "Failed",
+    )
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    return SuccessResponse(
+        success=delivered,
+        message="Real email dispatched successfully." if delivered else "Failed to send email via SMTP.",
+        data=EmailLogOut.model_validate(log),
+    )
+
+

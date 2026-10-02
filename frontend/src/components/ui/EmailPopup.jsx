@@ -37,7 +37,7 @@ export default function EmailPopup({
       open={open}
       title={title}
       onCancel={onCancel}
-      onOk={() => onSend({ subject, body })}
+      onOk={() => onSend({ subject, body, from: 'tdevendiran123@gmail.com' })}
       okText={okText}
       okDisabled={disabled}
       width={width}
@@ -54,6 +54,26 @@ export default function EmailPopup({
             overflow: 'hidden',
           }}
         >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '9px 14px',
+              background: 'var(--c-surface-alt)',
+              borderBottom: '1px solid var(--c-border)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <Mail size={14} strokeWidth={2} style={{ color: '#0f766e' }} />
+            <span style={{ fontSize: 12, color: 'var(--c-text-2)', marginRight: 2, fontWeight: 600 }}>From</span>
+            <span
+              className="badge"
+              style={{ background: '#f0fdfa', color: '#0f766e', borderColor: '#99f6e4', fontWeight: 600 }}
+            >
+              ToolShoppe Industrial Supply &lt;tdevendiran123@gmail.com&gt;
+            </span>
+          </div>
           <div
             style={{
               display: 'flex',

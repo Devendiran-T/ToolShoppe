@@ -306,7 +306,7 @@ export default function ComparisonView() {
         width={960}
         recipients={cust ? [cust.email] : []}
         defaultSubject={cr ? `Quotation for your enquiry ${cr.reference || cr.crNo}` : 'Quotation'}
-        defaultBody={'Dear Sir,\n\nThank you for your enquiry. Please find our offer below. Prices are ex-works and exclusive of GST.\n\nRegards,\nToolsphoppe'}
+        defaultBody={'Dear Sir,\n\nThank you for your enquiry. Please find our offer below. Prices are ex-works and exclusive of GST.\n\nRegards,\nSales & Sourcing Department\nToolShoppe Industrial Supply Pvt. Ltd.\ntdevendiran123@gmail.com'}
         onCancel={() => setSendOpen(false)}
         onSend={send}
       >

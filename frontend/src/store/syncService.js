@@ -8,6 +8,7 @@ import {
   mastersApi,
   salesApi,
   purchaseApi,
+  emailApi,
 } from '../api/endpoints.js'
 import { derive } from './reducer.js'
 import { computeBest } from '../logic/compare.js'
@@ -97,8 +98,8 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 5. Purchase Requests (PR)
   if (Array.isArray(bData.purchaseRequests) && bData.purchaseRequests.length > 0) {
-    s.purchaseRequests = bData.purchaseRequests.map((pr) => {
-      const cr = s.customerRequests.find((c) => c.id === (pr.customer_request_id || pr.crId))
+    s.purchaseRequests = bData.purchaseRequests.filter(Boolean).map((pr) => {
+      const cr = (s.customerRequests || []).find((c) => c && c.id === (pr.customer_request_id || pr.crId))
       return {
         id: pr.id,
         prNo: pr.pr_no || pr.prNo || `PR-${pr.id}`,
@@ -108,7 +109,7 @@ export function mapBackendToFrontend(bData, fallback) {
         rfqSupplierIds: pr.rfq_supplier_ids || pr.rfqSupplierIds || [],
         rfqSentAt: pr.rfq_sent_at || pr.rfqSentAt || null,
         status: pr.status || 'Open',
-        lines: (pr.items || pr.lines || (cr ? cr.lines : [])).map((l) => ({
+        lines: (pr.items || pr.lines || (cr ? cr.lines : []) || []).filter(Boolean).map((l) => ({
           itemId: l.item_id || l.itemId,
           qty: Number(l.quantity ?? l.qty ?? 1),
           unit: l.unit || 'Nos',
@@ -119,7 +120,7 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 6. Vendor Quotations (VQ)
   if (Array.isArray(bData.vendorQuotations) && bData.vendorQuotations.length > 0) {
-    s.vendorQuotations = bData.vendorQuotations.map((vq) => ({
+    s.vendorQuotations = bData.vendorQuotations.filter(Boolean).map((vq) => ({
       id: vq.id,
       vqNo: vq.quote_reference || vq.quotation_no || vq.vqNo || `VQ-${vq.id}`,
       date: vq.quote_date || (vq.created_at || '').slice(0, 10) || vq.date,
@@ -132,7 +133,7 @@ export function mapBackendToFrontend(bData, fallback) {
       freight: Number(vq.freight ?? 0),
       grandTotal: Number(vq.grand_total ?? vq.grandTotal ?? 0),
       status: vq.status || 'Received',
-      lines: (vq.lines || []).map((l) => ({
+      lines: (vq.lines || []).filter(Boolean).map((l) => ({
         itemId: l.item_id || l.itemId,
         qty: Number(l.quantity ?? l.qty ?? 1),
         rate: Number(l.rate ?? 0),
@@ -144,13 +145,16 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 7. Quotation Comparisons (QC)
   const qcMap = new Map()
-  ;(fallback.quotationComparisons || []).forEach((q) => qcMap.set(q.prId, q))
-  s.purchaseRequests.forEach((pr) => {
-    const vqs = s.vendorQuotations.filter((v) => v.prId === pr.id)
+  ;((fallback && fallback.quotationComparisons) || []).forEach((q) => {
+    if (q && q.prId) qcMap.set(q.prId, q)
+  })
+  ;(s.purchaseRequests || []).forEach((pr) => {
+    if (!pr || !pr.id) return
+    const vqs = (s.vendorQuotations || []).filter((v) => v && v.prId === pr.id)
     if (vqs.length > 0) {
       const existing = qcMap.get(pr.id)
-      const bestId = computeBest(vqs, pr.lines)
-      const selectedVq = vqs.find((v) => v.status === 'Selected')
+      const bestId = computeBest(vqs, pr.lines || [])
+      const selectedVq = vqs.find((v) => v && v.status === 'Selected')
       const isApproved = pr.status === 'Quoted' || pr.status === 'Ordered' || !!selectedVq
       qcMap.set(pr.id, {
         id: existing?.id || pr.id,
@@ -158,7 +162,7 @@ export function mapBackendToFrontend(bData, fallback) {
         date: existing?.date || pr.date,
         prId: pr.id,
         crId: pr.crId,
-        vqIds: vqs.map((v) => v.id),
+        vqIds: vqs.map((v) => v?.id).filter(Boolean),
         bestVqId: existing?.bestVqId || bestId,
         selectedVqId: selectedVq ? selectedVq.id : (existing?.selectedVqId || (isApproved ? bestId : null)),
         overrideReason: existing?.overrideReason || '',
@@ -263,8 +267,8 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 12. Inward Stock
   if (Array.isArray(bData.inwards) && bData.inwards.length > 0) {
-    s.inwards = bData.inwards.map((inw) => {
-      const linkedGrn = s.grns.find((g) => g.id === (inw.grn_id || inw.grnId))
+    s.inwards = bData.inwards.filter(Boolean).map((inw) => {
+      const linkedGrn = (s.grns || []).find((g) => g && (g.id === (inw.grn_id || inw.grnId)))
       return {
         id: inw.id,
         inwNo: inw.inward_no || inw.inwNo || `INW-${inw.id}`,
@@ -276,7 +280,7 @@ export function mapBackendToFrontend(bData, fallback) {
         status: inw.status || 'Pending',
         addedAt: inw.added_at || inw.addedAt || null,
         value: Number(inw.total_value ?? inw.value ?? 0),
-        lines: (inw.items || inw.lines || []).map((l) => ({
+        lines: (inw.items || inw.lines || []).filter(Boolean).map((l) => ({
           itemId: l.item_id || l.itemId,
           qty: Number(l.quantity ?? l.qty ?? 0),
           rate: Number(l.rate ?? 0),
@@ -287,7 +291,7 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 13. Outward (Delivery Challan)
   if (Array.isArray(bData.outwards) && bData.outwards.length > 0) {
-    s.outwards = bData.outwards.map((o) => ({
+    s.outwards = bData.outwards.filter(Boolean).map((o) => ({
       id: o.id,
       outNo: o.dc_number || o.dc_no || o.outward_no || o.outNo || `OUT-${o.id}`,
       date: (o.dispatch_date || o.created_at || '').slice(0, 10) || o.date,
@@ -300,7 +304,7 @@ export function mapBackendToFrontend(bData, fallback) {
       remarks: o.remarks || '',
       status: o.status || 'Dispatched',
       value: Number(o.total_value ?? o.value ?? 0),
-      lines: (o.items || o.lines || []).map((l) => ({
+      lines: (o.items || o.lines || []).filter(Boolean).map((l) => ({
         itemId: l.item_id || l.itemId,
         qty: Number(l.dispatch_qty ?? l.quantity ?? l.qty ?? 0),
         price: Number(l.selling_price ?? l.price ?? 0),
@@ -310,7 +314,7 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 14. Sales Invoices
   if (Array.isArray(bData.salesInvoices) && bData.salesInvoices.length > 0) {
-    s.salesInvoices = bData.salesInvoices.map((si) => ({
+    s.salesInvoices = bData.salesInvoices.filter(Boolean).map((si) => ({
       id: si.id,
       siNo: si.invoice_no || si.siNo || `SI-${si.id}`,
       date: (si.invoice_date || si.created_at || '').slice(0, 10) || si.date,
@@ -324,7 +328,7 @@ export function mapBackendToFrontend(bData, fallback) {
       tax: Number(si.tax_amount ?? si.tax ?? 0),
       total: Number(si.grand_total ?? si.total ?? 0),
       status: si.status || 'Final',
-      lines: (si.items || si.lines || []).map((l) => ({
+      lines: (si.items || si.lines || []).filter(Boolean).map((l) => ({
         itemId: l.item_id || l.itemId,
         hsn: l.hsn_code || l.hsn || '',
         qty: Number(l.quantity ?? l.qty ?? 0),
@@ -339,8 +343,8 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 15. Purchase Invoices
   if (Array.isArray(bData.purchaseInvoices) && bData.purchaseInvoices.length > 0) {
-    s.purchaseInvoices = bData.purchaseInvoices.map((pi) => {
-      const linkedGrn = s.grns.find((g) => g.id === (pi.grn_id || pi.grnId))
+    s.purchaseInvoices = bData.purchaseInvoices.filter(Boolean).map((pi) => {
+      const linkedGrn = (s.grns || []).find((g) => g && (g.id === (pi.grn_id || pi.grnId)))
       return {
         id: pi.id,
         piNo: pi.internal_invoice_no || pi.piNo || `PI-${pi.id}`,
@@ -356,7 +360,7 @@ export function mapBackendToFrontend(bData, fallback) {
         tax: Number(pi.tax_amount ?? pi.tax ?? 0),
         total: Number(pi.grand_total ?? pi.total ?? 0),
         status: pi.status || 'Verified',
-        lines: (pi.items || pi.lines || []).map((l) => ({
+        lines: (pi.items || pi.lines || []).filter(Boolean).map((l) => ({
           itemId: l.item_id || l.itemId,
           qty: Number(l.quantity ?? l.qty ?? 0),
           rate: Number(l.rate ?? 0),
@@ -371,14 +375,14 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 16. Stock Ledger
   if (Array.isArray(bData.ledger) && bData.ledger.length > 0) {
-    s.stockLedger = bData.ledger.map((l) => {
+    s.stockLedger = bData.ledger.filter(Boolean).map((l) => {
       const isOut = (l.movement_type || '').toUpperCase() === 'OUT'
       let partyId = null
       if (isOut) {
-        const outDoc = s.outwards.find((o) => o.id === l.reference_id || String(o.id) === String(l.reference_id))
+        const outDoc = (s.outwards || []).find((o) => o && (o.id === l.reference_id || String(o.id) === String(l.reference_id)))
         partyId = outDoc ? outDoc.customerId : null
       } else {
-        const inwDoc = s.inwards.find((i) => i.id === l.reference_id || String(i.id) === String(l.reference_id))
+        const inwDoc = (s.inwards || []).find((i) => i && (i.id === l.reference_id || String(i.id) === String(l.reference_id)))
         partyId = inwDoc ? inwDoc.supplierId : null
       }
       return {
@@ -558,6 +562,18 @@ export async function syncActionToBackend(action, state) {
             subject,
             body,
           })
+        } else {
+          for (const sId of (supplierIds || [])) {
+            const sup = (state.suppliers || []).find((s) => s.id === sId)
+            if (sup && sup.email) {
+              await emailApi.sendLiveEmail({
+                recipient: sup.email,
+                subject: subject || 'Request for Quotation',
+                body: body || 'Please find our RFQ.',
+                document_type: 'RFQ',
+              }).catch(() => {})
+            }
+          }
         }
         break
       }
