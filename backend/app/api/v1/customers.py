@@ -11,6 +11,7 @@ from app.crud.customer import (
     create_customer,
     update_customer,
     update_customer_status,
+    delete_customer,
 )
 from app.db.session import get_db
 from app.models.user import User
@@ -196,3 +197,38 @@ def toggle_customer_status(
         message=f"Customer has been {status_label} successfully",
         data=CustomerOut.model_validate(updated),
     )
+
+
+@router.delete(
+    "/{customer_name}",
+    response_model=SuccessResponse[Dict[str, Any]],
+    summary="Delete Customer",
+    description="Permanently delete a customer by name, customer code, or numeric ID."
+)
+def delete_existing_customer(
+    customer_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    customer = get_customer_by_name(db, customer_name)
+    if not customer and customer_name.isdigit():
+        customer = get_customer_by_id(db, int(customer_name))
+    if not customer:
+        customer = db.query(Customer).filter(Customer.customer_code.ilike(customer_name)).first()
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer '{customer_name}' not found.",
+        )
+
+    customer_id = customer.id
+    customer_code = customer.customer_code
+    customer_real_name = customer.name
+
+    delete_customer(db, customer)
+    return SuccessResponse(
+        success=True,
+        message=f"Customer '{customer_real_name}' ({customer_code}) deleted successfully.",
+        data={"id": customer_id, "customer_code": customer_code, "name": customer_real_name},
+    )
+

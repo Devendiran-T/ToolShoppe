@@ -625,6 +625,14 @@ export async function syncActionToBackend(action, state) {
         break
       }
 
+      case 'MASTER_DELETE': {
+        const { collection, id } = action
+        if (collection === 'customers') {
+          await mastersApi.deleteCustomer(id)
+        }
+        break
+      }
+
       /* Sales - 01. Customer Request */
       case 'CR_CREATE': {
         const { payload } = action

@@ -139,3 +139,11 @@ def update_customer_status(db: Session, db_obj: Customer, status: bool) -> Custo
     db.commit()
     db.refresh(db_obj)
     return db_obj
+
+
+def delete_customer(db: Session, db_obj: Customer) -> Customer:
+    """Permanently delete a customer record."""
+    db.delete(db_obj)
+    db.commit()
+    return db_obj
+

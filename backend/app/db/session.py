@@ -51,7 +51,7 @@ def create_db_engine():
                     pool_recycle=280,
                     pool_size=10,
                     max_overflow=20,
-                    connect_args={"connect_timeout": 10, "read_timeout": 30, "write_timeout": 30}
+                    connect_args={"connect_timeout": 15, "read_timeout": 60, "write_timeout": 60}
                 )
                 with engine.connect() as conn:
                     pass

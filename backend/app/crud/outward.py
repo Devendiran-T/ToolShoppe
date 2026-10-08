@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from decimal import Decimal
 from typing import List, Optional, Tuple
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.outward import Outward, OutwardItem
 from app.models.customer_order import CustomerOrder
@@ -85,7 +85,15 @@ def get_outwards(
     customer_request_id: Optional[int] = None,
 ) -> Tuple[List[Outward], int]:
     """Retrieve Outward records with optional filters and pagination."""
-    query = db.query(Outward)
+    query = (
+        db.query(Outward)
+        .options(
+            joinedload(Outward.items).joinedload(OutwardItem.item),
+            joinedload(Outward.customer_order),
+            joinedload(Outward.customer_request),
+            joinedload(Outward.customer),
+        )
+    )
 
     if status and status.lower() != "all":
         query = query.filter(Outward.status.ilike(status.strip()))

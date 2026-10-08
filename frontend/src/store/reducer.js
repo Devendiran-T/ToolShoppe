@@ -106,6 +106,15 @@ export function reducer(state, action) {
       if (r) r.active = !r.active
       return derive(s)
     }
+    case 'MASTER_DELETE': {
+      const { collection, id } = action
+      if (Array.isArray(s[collection])) {
+        s[collection] = s[collection].filter(
+          (x) => x && String(x.id) !== String(id) && x.name !== id && x.code !== id
+        )
+      }
+      return derive(s)
+    }
 
     /* ---------------- 2.1 Customer Request -> auto PR ---------------- */
     case 'CR_CREATE': {

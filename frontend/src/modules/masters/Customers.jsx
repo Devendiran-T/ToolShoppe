@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Input, InputNumber, Row, Col, Switch, Tooltip } from 'antd'
-import { Plus, Pencil, Eye, Users, Power, PowerOff } from 'lucide-react'
+import { Plus, Pencil, Eye, Users, Power, PowerOff, Trash2 } from 'lucide-react'
 import { useApp } from '../../store/AppContext.jsx'
 import {
   DataTable, PageHeader, StatusBadge, Btn, IconBtn, RowActions, FormModal,
@@ -51,6 +51,18 @@ export default function Customers() {
       },
     })
 
+  const removeCustomer = (r) =>
+    confirm({
+      title: `Delete customer "${r.name}"?`,
+      description: `This will permanently delete ${r.name} (${r.code || ''}) from the system.`,
+      okText: 'Delete Customer',
+      tone: 'danger',
+      onConfirm: () => {
+        dispatch({ type: 'MASTER_DELETE', collection: 'customers', id: r.id })
+        toast.success(`Customer "${r.name}" deleted successfully.`)
+      },
+    })
+
   const columns = [
     {
       title: 'Customer',
@@ -73,7 +85,7 @@ export default function Customers() {
     { title: 'Status', width: 106, render: (_, r) => <StatusBadge status={r.active ? 'Active' : 'Inactive'} /> },
     {
       title: 'Actions',
-      width: 116,
+      width: 140,
       fixed: 'right',
       render: (_, r) => (
         <RowActions>
@@ -84,6 +96,12 @@ export default function Customers() {
             label={r.active ? 'Deactivate' : 'Reactivate'}
             danger={r.active}
             onClick={() => toggle(r)}
+          />
+          <IconBtn
+            icon={Trash2}
+            label="Delete"
+            danger
+            onClick={() => removeCustomer(r)}
           />
         </RowActions>
       ),

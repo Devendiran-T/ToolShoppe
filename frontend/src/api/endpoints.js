@@ -19,6 +19,7 @@ export const mastersApi = {
   getCustomers: (params) => api.get('/api/v1/customers', { params }),
   createCustomer: (data) => api.post('/api/v1/customers', data),
   updateCustomer: (id, data) => api.put(`/api/v1/customers/${id}`, data),
+  deleteCustomer: (id) => api.delete(`/api/v1/customers/${id}`),
   toggleCustomer: (id) => api.patch(`/api/v1/customers/${id}/toggle-status`),
 
   // Suppliers
