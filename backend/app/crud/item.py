@@ -22,6 +22,33 @@ def get_item_by_id(db: Session, item_id: int) -> Optional[Item]:
     return db.query(Item).filter(Item.id == item_id).first()
 
 
+def get_item_by_name(db: Session, name: str) -> Optional[Item]:
+    """
+    Retrieve item by exact/case-insensitive name, item code, or numeric ID.
+    """
+    if not name:
+        return None
+    clean = str(name).strip()
+    # 1. Exact case-insensitive name match
+    itm = db.query(Item).filter(Item.name.ilike(clean)).first()
+    if itm:
+        return itm
+    # 2. Item code match
+    itm = db.query(Item).filter(Item.item_code.ilike(clean)).first()
+    if itm:
+        return itm
+    # 3. Numeric ID fallback
+    if clean.isdigit():
+        itm = db.query(Item).filter(Item.id == int(clean)).first()
+        if itm:
+            return itm
+    # 4. Partial name match fallback
+    itm = db.query(Item).filter(Item.name.ilike(f"%{clean}%")).first()
+    if itm:
+        return itm
+    return None
+
+
 def get_item_by_code(db: Session, code: str) -> Optional[Item]:
     """Retrieve item by unique item code."""
     return db.query(Item).filter(Item.item_code == code).first()

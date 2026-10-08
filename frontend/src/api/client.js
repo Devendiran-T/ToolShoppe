@@ -86,7 +86,21 @@ export async function request(path, options = {}, isRetry = false) {
     await ensureAuthToken()
   }
 
-  const url = path.startsWith('http') ? path : `${API_BASE}${path}`
+  let url = path.startsWith('http') ? path : `${API_BASE}${path}`
+
+  if (options.params && typeof options.params === 'object') {
+    const searchParams = new URLSearchParams()
+    for (const [key, value] of Object.entries(options.params)) {
+      if (value !== undefined && value !== null && value !== '') {
+        searchParams.append(key, String(value))
+      }
+    }
+    const queryString = searchParams.toString()
+    if (queryString) {
+      url += (url.includes('?') ? '&' : '?') + queryString
+    }
+  }
+
   const headers = new Headers(options.headers || {})
 
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
@@ -98,8 +112,9 @@ export async function request(path, options = {}, isRetry = false) {
     headers.set('Authorization', `Bearer ${token}`)
   }
 
+  const { params: _, ...restOptions } = options
   const config = {
-    ...options,
+    ...restOptions,
     headers,
   }
 

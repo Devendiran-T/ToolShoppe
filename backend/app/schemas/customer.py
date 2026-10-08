@@ -23,6 +23,7 @@ class CustomerBase(BaseModel):
     )
     payment_terms: Optional[str] = Field(None, max_length=100, description="Agreed payment terms")
 
+class CustomerCreate(CustomerBase):
     @field_validator("email")
     @classmethod
     def validate_email_format(cls, v: str) -> str:
@@ -31,9 +32,19 @@ class CustomerBase(BaseModel):
             raise ValueError(f"'{v}' is not a valid email address.")
         return v_clean.lower()
 
-
-class CustomerCreate(CustomerBase):
-    pass
+    @field_validator("phone")
+    @classmethod
+    def validate_phone_format(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        digits = re.sub(r"\D", "", v)
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        if len(digits) == 11 and digits.startswith("0"):
+            digits = digits[1:]
+        if len(digits) != 10:
+            raise ValueError(f"Mobile number must be exactly 10 digits. Provided: '{v}'")
+        return digits
 
 
 class CustomerUpdate(BaseModel):
@@ -56,6 +67,20 @@ class CustomerUpdate(BaseModel):
         if not EMAIL_REGEX.match(v_clean):
             raise ValueError(f"'{v}' is not a valid email address.")
         return v_clean.lower()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not v.strip():
+            return None
+        digits = re.sub(r"\D", "", v)
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        if len(digits) == 11 and digits.startswith("0"):
+            digits = digits[1:]
+        if len(digits) != 10:
+            raise ValueError(f"Mobile number must be exactly 10 digits. Provided: '{v}'")
+        return digits
 
 
 class CustomerStatusUpdate(BaseModel):

@@ -5,7 +5,8 @@ from pydantic import BaseModel, Field
 
 
 class QuotationItemBase(BaseModel):
-    item_id: int
+    item_id: Optional[int] = None
+    item_name: Optional[str] = None
     rate: Decimal = Field(default=Decimal("0.00"), ge=0, description="Unit rate quoted by supplier")
     tax_percent: Decimal = Field(default=Decimal("0.00"), ge=0, le=100, description="GST tax percentage")
     not_quoted: bool = Field(default=False, description="Whether supplier does not quote for this item")
@@ -18,6 +19,7 @@ class QuotationItemCreate(QuotationItemBase):
 class QuotationItemOut(QuotationItemBase):
     id: int
     quotation_id: int
+    item_id: int
     item_name: Optional[str] = None
     item_code: Optional[str] = None
     line_total: Decimal = Decimal("0.00")
@@ -28,7 +30,8 @@ class QuotationItemOut(QuotationItemBase):
 
 class VendorQuotationCreate(BaseModel):
     purchase_request_id: int = Field(..., description="Purchase Request ID")
-    supplier_id: int = Field(..., description="Supplier ID")
+    supplier_id: Optional[int] = Field(None, description="Supplier ID")
+    supplier_name: Optional[str] = Field(None, description="Supplier Name (can be used instead of supplier_id)")
     quote_reference: Optional[str] = Field(None, max_length=100, description="Supplier's quotation reference number")
     quote_date: Optional[date] = Field(None, description="Date on supplier quotation")
     validity: Optional[date] = Field(None, description="Quote expiration date")

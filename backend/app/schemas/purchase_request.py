@@ -24,6 +24,7 @@ class PurchaseRequestOut(BaseModel):
 
 class RFQSendRequest(BaseModel):
     pr_id: int = Field(..., description="Purchase Request ID")
-    supplier_ids: List[int] = Field(..., min_length=1, description="List of supplier IDs to dispatch RFQ to")
+    supplier_ids: Optional[List[int]] = Field(None, description="List of supplier IDs to dispatch RFQ to")
+    supplier_names: Optional[List[str]] = Field(None, description="List of supplier names to dispatch RFQ to")
     subject: str = Field(..., min_length=1, max_length=255, description="Email subject")
     body: str = Field(..., min_length=1, description="Email body content")

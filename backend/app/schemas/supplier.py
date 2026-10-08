@@ -17,14 +17,6 @@ class SupplierBase(BaseModel):
     address: Optional[str] = Field(None, description="Supplier address")
     lead_time_days: int = Field(default=0, ge=0, description="Typical fulfillment lead time in days (>= 0)")
 
-    @field_validator("email")
-    @classmethod
-    def validate_email_format(cls, v: str) -> str:
-        v_clean = v.strip()
-        if not EMAIL_REGEX.match(v_clean):
-            raise ValueError(f"'{v}' is not a valid email address.")
-        return v_clean.lower()
-
     @field_validator("categories", mode="before")
     @classmethod
     def serialize_categories(cls, v):
@@ -34,7 +26,27 @@ class SupplierBase(BaseModel):
 
 
 class SupplierCreate(SupplierBase):
-    pass
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v: str) -> str:
+        v_clean = v.strip()
+        if not EMAIL_REGEX.match(v_clean):
+            raise ValueError(f"'{v}' is not a valid email address.")
+        return v_clean.lower()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone_format(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return None
+        digits = re.sub(r"\D", "", v)
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        if len(digits) == 11 and digits.startswith("0"):
+            digits = digits[1:]
+        if len(digits) != 10:
+            raise ValueError(f"Mobile number must be exactly 10 digits. Provided: '{v}'")
+        return digits
 
 
 class SupplierUpdate(BaseModel):
@@ -63,6 +75,20 @@ class SupplierUpdate(BaseModel):
         if not EMAIL_REGEX.match(v_clean):
             raise ValueError(f"'{v}' is not a valid email address.")
         return v_clean.lower()
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None or not v.strip():
+            return None
+        digits = re.sub(r"\D", "", v)
+        if len(digits) == 12 and digits.startswith("91"):
+            digits = digits[2:]
+        if len(digits) == 11 and digits.startswith("0"):
+            digits = digits[1:]
+        if len(digits) != 10:
+            raise ValueError(f"Mobile number must be exactly 10 digits. Provided: '{v}'")
+        return digits
 
 
 class SupplierStatusUpdate(BaseModel):

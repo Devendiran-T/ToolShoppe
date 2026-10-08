@@ -280,7 +280,7 @@ export function buildDemoState() {
     },
   })
   const vq4 = s.vendorQuotations.find((v) => v.prId === pr4.id)
-  run({ type: 'QC_AUTO_SELECT', prId: pr4.id })
+  run({ type: 'QC_CREATE', prId: pr4.id })
   const qc4 = s.quotationComparisons.find((q) => q.prId === pr4.id)
   run({
     type: 'QC_APPROVE',
@@ -337,7 +337,7 @@ export function buildDemoState() {
     },
   })
   const vq5 = s.vendorQuotations.find((v) => v.prId === pr5.id)
-  run({ type: 'QC_AUTO_SELECT', prId: pr5.id })
+  run({ type: 'QC_CREATE', prId: pr5.id })
   const qc5 = s.quotationComparisons.find((q) => q.prId === pr5.id)
   run({
     type: 'QC_APPROVE',

@@ -14,7 +14,7 @@ logger = logging.getLogger("app.db")
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 
 
-def is_mysql_reachable(url_str: str, timeout: float = 1.5) -> bool:
+def is_mysql_reachable(url_str: str, timeout: float = 5.0) -> bool:
     """Fast socket test to check if remote MySQL host and port are responding."""
     try:
         clean = url_str.replace("mysql+pymysql://", "http://").replace("mysql://", "http://")
@@ -43,7 +43,7 @@ def create_db_engine():
     """
     db_url = settings.DATABASE_URL
     if db_url.startswith("mysql"):
-        if is_mysql_reachable(db_url, timeout=1.5):
+        if is_mysql_reachable(db_url, timeout=5.0):
             try:
                 engine = create_engine(
                     db_url,
@@ -51,7 +51,7 @@ def create_db_engine():
                     pool_recycle=280,
                     pool_size=10,
                     max_overflow=20,
-                    connect_args={"connect_timeout": 3, "read_timeout": 30, "write_timeout": 30}
+                    connect_args={"connect_timeout": 10, "read_timeout": 30, "write_timeout": 30}
                 )
                 with engine.connect() as conn:
                     pass

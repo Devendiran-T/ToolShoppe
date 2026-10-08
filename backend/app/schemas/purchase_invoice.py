@@ -5,7 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class PurchaseInvoiceItemCreate(BaseModel):
-    item_id: int
+    item_id: Optional[int] = None
+    item_name: Optional[str] = None
     quantity: Decimal = Field(..., gt=0)
     unit: Optional[str] = None
     rate: Optional[Decimal] = None
@@ -15,6 +16,7 @@ class PurchaseInvoiceItemCreate(BaseModel):
 class PurchaseInvoiceCreate(BaseModel):
     grn_id: int
     supplier_id: Optional[int] = None
+    supplier_name: Optional[str] = None
     supplier_invoice_no: str = Field(..., min_length=1)
     supplier_invoice_date: date
     remarks: Optional[str] = None

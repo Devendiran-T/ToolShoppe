@@ -8,6 +8,7 @@ from app.models.email_log import EmailLog
 from app.schemas.purchase_order import (
     PurchaseOrderOut, PurchaseOrderItemOut, PurchaseOrderSendRequest
 )
+from app.core.email import send_live_email
 
 
 def format_po_out(po: PurchaseOrder) -> PurchaseOrderOut:
@@ -103,12 +104,17 @@ def send_purchase_order(
     po.status = "Sent"
     po.sent_at = datetime.utcnow()
 
+    delivered = False
+    if recipient:
+        delivered = send_live_email(recipients=recipient, subject=subject, body=body)
+
     email_log = EmailLog(
         document_type="Purchase Order",
         document_id=po.id,
         recipient=recipient,
         subject=subject,
         body=body,
+        status="Sent" if delivered else "Failed",
         sent_at=po.sent_at,
     )
     db.add(email_log)

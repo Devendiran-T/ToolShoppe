@@ -12,8 +12,15 @@ export default function OutwardView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const o = (s.outwards || []).find((x) => String(x.id) === String(id))
+  const o = (s.outwards || []).find((x) => String(x.id) === String(id) || (x.localId && String(x.localId) === String(id)) || String(x.outNo) === String(id))
   useDocLabel(o ? o.outNo : null)
+
+  React.useEffect(() => {
+    if (o && String(o.id) !== String(id) && typeof o.id !== 'undefined') {
+      nav(`/sales/outward/${o.id}`, { replace: true })
+    }
+  }, [o, id, nav])
+
   if (!o) return <Navigate to="/sales/outward" replace />
 
   const so = (s.salesOrders || []).find((x) => String(x.id) === String(o.soId))

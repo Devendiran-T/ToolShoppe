@@ -22,6 +22,33 @@ def get_supplier_by_id(db: Session, supplier_id: int) -> Optional[Supplier]:
     return db.query(Supplier).filter(Supplier.id == supplier_id).first()
 
 
+def get_supplier_by_name(db: Session, name: str) -> Optional[Supplier]:
+    """
+    Retrieve supplier by exact/case-insensitive name, supplier code, or numeric ID.
+    """
+    if not name:
+        return None
+    clean = str(name).strip()
+    # 1. Exact case-insensitive name match
+    sup = db.query(Supplier).filter(Supplier.name.ilike(clean)).first()
+    if sup:
+        return sup
+    # 2. Supplier code match
+    sup = db.query(Supplier).filter(Supplier.supplier_code.ilike(clean)).first()
+    if sup:
+        return sup
+    # 3. Numeric ID fallback
+    if clean.isdigit():
+        sup = db.query(Supplier).filter(Supplier.id == int(clean)).first()
+        if sup:
+            return sup
+    # 4. Partial name match fallback
+    sup = db.query(Supplier).filter(Supplier.name.ilike(f"%{clean}%")).first()
+    if sup:
+        return sup
+    return None
+
+
 def get_supplier_by_code(db: Session, code: str) -> Optional[Supplier]:
     """Retrieve supplier by code."""
     return db.query(Supplier).filter(Supplier.supplier_code == code).first()

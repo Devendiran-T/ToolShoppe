@@ -20,7 +20,7 @@ export default function VendorQuotationForm() {
   const nav = useNavigate()
   const { state, dispatch } = useApp()
   const toast = useToast()
-  const existing = id && id !== 'new' ? (state.vendorQuotations || []).find((v) => String(v.id) === String(id)) : null
+  const existing = id && id !== 'new' ? (state.vendorQuotations || []).find((v) => String(v.id) === String(id) || (v.localId && String(v.localId) === String(id)) || String(v.vqNo) === String(id)) : null
   const locked = existing && existing.status !== 'Received'
   useDocLabel(existing ? existing.vqNo : 'New')
 

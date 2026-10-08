@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.crud.supplier import (
     get_supplier_by_id,
+    get_supplier_by_name,
     get_supplier_by_email,
     get_suppliers,
     create_supplier,
@@ -67,21 +68,23 @@ def list_suppliers(
 
 
 @router.get(
-    "/{supplier_id}",
+    "/{supplier_name}",
     response_model=SuccessResponse[SupplierOut],
     summary="Get Supplier Details",
-    description="Retrieve a single supplier by their numeric ID."
+    description="Retrieve a single supplier by their name, code, or numeric ID."
 )
 def get_supplier(
-    supplier_id: int,
+    supplier_name: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    supplier = get_supplier_by_id(db, supplier_id)
+    supplier = get_supplier_by_name(db, supplier_name)
+    if not supplier and supplier_name.isdigit():
+        supplier = get_supplier_by_id(db, int(supplier_name))
     if not supplier:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Supplier with ID {supplier_id} not found.",
+            detail=f"Supplier '{supplier_name}' not found.",
         )
     return SuccessResponse(
         success=True,
@@ -91,22 +94,24 @@ def get_supplier(
 
 
 @router.put(
-    "/{supplier_id}",
+    "/{supplier_name}",
     response_model=SuccessResponse[SupplierOut],
     summary="Update Supplier",
-    description="Update fields of an existing supplier."
+    description="Update fields of an existing supplier by name, code, or numeric ID."
 )
 def update_existing_supplier(
-    supplier_id: int,
+    supplier_name: str,
     supplier_in: SupplierUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    supplier = get_supplier_by_id(db, supplier_id)
+    supplier = get_supplier_by_name(db, supplier_name)
+    if not supplier and supplier_name.isdigit():
+        supplier = get_supplier_by_id(db, int(supplier_name))
     if not supplier:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Supplier with ID {supplier_id} not found.",
+            detail=f"Supplier '{supplier_name}' not found.",
         )
 
     updated = update_supplier(db, supplier, supplier_in)
@@ -118,26 +123,57 @@ def update_existing_supplier(
 
 
 @router.patch(
-    "/{supplier_id}/status",
+    "/{supplier_name}/status",
     response_model=SuccessResponse[SupplierOut],
     summary="Toggle Supplier Status (Soft Delete)",
-    description="Activate or deactivate a supplier. Records are soft-deleted and never physically removed."
+    description="Activate or deactivate a supplier by name, code, or numeric ID."
 )
 def change_supplier_status(
-    supplier_id: int,
+    supplier_name: str,
     status_in: SupplierStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    supplier = get_supplier_by_id(db, supplier_id)
+    supplier = get_supplier_by_name(db, supplier_name)
+    if not supplier and supplier_name.isdigit():
+        supplier = get_supplier_by_id(db, int(supplier_name))
     if not supplier:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Supplier with ID {supplier_id} not found.",
+            detail=f"Supplier '{supplier_name}' not found.",
         )
 
     updated = update_supplier_status(db, supplier, status_in.status)
     status_label = "activated" if status_in.status else "deactivated"
+    return SuccessResponse(
+        success=True,
+        message=f"Supplier has been {status_label} successfully",
+        data=SupplierOut.model_validate(updated),
+    )
+
+
+@router.patch(
+    "/{supplier_name}/toggle-status",
+    response_model=SuccessResponse[SupplierOut],
+    summary="Toggle Supplier Status",
+    description="Toggle active/inactive status of a supplier."
+)
+def toggle_supplier_status(
+    supplier_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    supplier = get_supplier_by_name(db, supplier_name)
+    if not supplier and supplier_name.isdigit():
+        supplier = get_supplier_by_id(db, int(supplier_name))
+    if not supplier:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Supplier '{supplier_name}' not found.",
+        )
+
+    updated = update_supplier_status(db, supplier, not supplier.status)
+    status_label = "activated" if updated.status else "deactivated"
     return SuccessResponse(
         success=True,
         message=f"Supplier has been {status_label} successfully",

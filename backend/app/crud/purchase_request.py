@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from app.models.purchase_request import PurchaseRequest, RFQSupplier
 from app.models.customer_request import CustomerRequest, CustomerRequestItem
 from app.models.supplier import Supplier
+from app.crud.supplier import get_supplier_by_name
 from app.models.email_log import EmailLog
 from app.schemas.customer_request import CustomerRequestItemOut
 from app.schemas.purchase_request import PurchaseRequestOut, RFQSendRequest
@@ -100,8 +101,20 @@ def send_rfq(
     if not pr:
         raise ValueError(f"Purchase Request with ID {rfq_data.pr_id} not found.")
 
+    resolved_sup_ids = set(rfq_data.supplier_ids or [])
+    if rfq_data.supplier_names:
+        for sname in rfq_data.supplier_names:
+            sup = get_supplier_by_name(db, sname)
+            if sup:
+                resolved_sup_ids.add(sup.id)
+            else:
+                raise ValueError(f"Supplier '{sname}' not found.")
+
+    if not resolved_sup_ids:
+        raise ValueError("At least one supplier (by ID or name) must be specified.")
+
     created_logs = []
-    for sup_id in rfq_data.supplier_ids:
+    for sup_id in resolved_sup_ids:
         supplier = db.query(Supplier).filter(Supplier.id == sup_id).first()
         if not supplier:
             continue

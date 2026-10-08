@@ -7,6 +7,8 @@ from app.models.purchase_invoice import PurchaseInvoice, PurchaseInvoiceItem
 from app.models.grn import GRN, GRNItem
 from app.models.supplier import Supplier
 from app.models.item import Item
+from app.crud.supplier import get_supplier_by_name
+from app.crud.item import get_item_by_name
 from app.schemas.purchase_invoice import (
     PurchaseInvoiceCreate, PurchaseInvoiceOut, PurchaseInvoiceItemOut
 )
@@ -119,7 +121,14 @@ def create_purchase_invoice(
     if not grn:
         raise ValueError(f"GRN with ID {obj_in.grn_id} not found.")
 
-    supplier_id = obj_in.supplier_id or grn.supplier_id
+    supplier_id = obj_in.supplier_id
+    if not supplier_id and obj_in.supplier_name:
+        s_obj = get_supplier_by_name(db, obj_in.supplier_name)
+        if s_obj:
+            supplier_id = s_obj.id
+    if not supplier_id:
+        supplier_id = grn.supplier_id
+
     if obj_in.supplier_id and obj_in.supplier_id != grn.supplier_id:
         raise ValueError(f"Supplier ID {obj_in.supplier_id} does not match GRN supplier ID {grn.supplier_id}.")
 
@@ -172,6 +181,10 @@ def create_purchase_invoice(
 
     if lines_to_process:
         for line in lines_to_process:
+            if line.item_id is None and line.item_name:
+                itm_obj = get_item_by_name(db, line.item_name)
+                if itm_obj:
+                    line.item_id = itm_obj.id
             if line.item_id not in grn_items_map:
                 raise ValueError(f"Item ID {line.item_id} is not present in GRN {grn.grn_no}.")
             g_item = grn_items_map[line.item_id]
@@ -232,6 +245,9 @@ def create_purchase_invoice(
     purchase_inv.subtotal = subtotal
     purchase_inv.tax_amount = total_tax
     purchase_inv.grand_total = subtotal + total_tax
+
+    # Update GRN status to 'Invoiced'
+    grn.status = "Invoiced"
 
     # Check and update customer request status to 'Completed' if both invoices exist
     check_and_update_customer_request_status(db, grn.customer_request_id)

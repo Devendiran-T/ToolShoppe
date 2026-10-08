@@ -19,7 +19,7 @@ export default function ComparisonView() {
   const { state, dispatch } = useApp()
   const toast = useToast()
 
-  const qc = state.quotationComparisons.find((x) => x.id === id || String(x.id) === String(id))
+  const qc = state.quotationComparisons.find((x) => x.id === id || String(x.id) === String(id) || String(x.qcNo) === String(id) || (x.localId && String(x.localId) === String(id)))
   const [sel, setSel] = useState(qc ? qc.selectedVqId : null)
   const [reason, setReason] = useState(qc ? qc.overrideReason : '')
   const [sendOpen, setSendOpen] = useState(false)

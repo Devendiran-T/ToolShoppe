@@ -18,6 +18,7 @@ from app.crud.sales_invoice import (
     format_sales_invoice_out, preview_sales_invoice
 )
 from app.crud.outward import get_outward_by_id
+from app.crud.customer import get_customer_by_name
 
 router = APIRouter(prefix="/sales/invoices", tags=["2. Sales - Invoice"])
 api_alias_router = APIRouter(prefix="/api/sales-invoices", tags=["2. Sales - Invoice"])
@@ -70,11 +71,17 @@ def list_invoices(
     limit: int = Query(100, ge=1, le=1000),
     status: Optional[str] = Query(None, description="Filter by status (Issued, Created, Paid)"),
     customer_id: Optional[int] = Query(None, description="Filter by Customer ID"),
+    customer_name: Optional[str] = Query(None, description="Filter by Customer Name"),
     customer_request_id: Optional[int] = Query(None, description="Filter by Customer Request ID"),
     outward_id: Optional[int] = Query(None, description="Filter by Outward ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if customer_id is None and customer_name:
+        cust = get_customer_by_name(db, customer_name)
+        if cust:
+            customer_id = cust.id
+
     items, total = get_sales_invoices(
         db=db,
         skip=skip,

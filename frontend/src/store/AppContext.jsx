@@ -25,10 +25,24 @@ function load() {
 }
 
 export function AppProvider({ children }) {
-  const [state, dispatchLocal] = useReducer(reducer, undefined, load)
+  const stateRef = React.useRef(null)
+
+  const enhancedReducer = useCallback((prevState, action) => {
+    const nextState = reducer(prevState, action)
+    stateRef.current = nextState
+    try {
+      localStorage.setItem(KEY, JSON.stringify(nextState))
+    } catch {}
+    return nextState
+  }, [])
+
+  const [state, dispatchLocal] = useReducer(enhancedReducer, undefined, load)
   const [isAuth, setIsAuth] = useState(() => localStorage.getItem('isAuth') === 'true')
   const [backendConnected, setBackendConnected] = useState(false)
-  const stateRef = React.useRef(state)
+
+  if (stateRef.current === null) {
+    stateRef.current = state
+  }
 
   useEffect(() => {
     stateRef.current = state
@@ -38,10 +52,12 @@ export function AppProvider({ children }) {
     try {
       await ensureAuthToken()
       const bData = await fetchAllBackendData()
-      if (bData) {
+      if (bData && stateRef.current) {
+        const mergedState = mapBackendToFrontend(bData, stateRef.current)
+        stateRef.current = mergedState
         dispatchLocal({
           type: 'RESET_DEMO',
-          state: mapBackendToFrontend(bData, stateRef.current),
+          state: mergedState,
         })
         setBackendConnected(true)
         return true
@@ -89,12 +105,11 @@ export function AppProvider({ children }) {
       dispatchLocal(action)
       try {
         await syncActionToBackend(action, stateRef.current)
-        await refreshFromBackend()
       } catch (err) {
         console.warn('Action sync notice:', err)
       }
     },
-    [refreshFromBackend]
+    []
   )
 
   useEffect(() => {
@@ -126,10 +141,12 @@ export function AppProvider({ children }) {
       initConnection()
     }
     window.addEventListener('focus', onWindowFocus)
+    window.addEventListener('ERP_SYNC_TRIGGER', initConnection)
 
     return () => {
       if (intervalId) clearInterval(intervalId)
       window.removeEventListener('focus', onWindowFocus)
+      window.removeEventListener('ERP_SYNC_TRIGGER', initConnection)
     }
   }, [refreshFromBackend])
 

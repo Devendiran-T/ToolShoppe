@@ -14,6 +14,8 @@ from app.schemas.response import SuccessResponse
 from app.schemas.reports import (
     SalesReportOut, PurchaseReportOut, InventoryReportOut, MarginReportOut
 )
+from app.crud.customer import get_customer_by_name
+from app.crud.item import get_item_by_name
 from app.crud.reports import (
     get_sales_report, get_purchase_report, get_inventory_report,
     get_margin_report, generate_csv_output
@@ -34,7 +36,9 @@ api_alias_router = APIRouter(prefix="/api/reports", tags=["5. Reports & Analytic
 )
 def sales_report(
     customer_id: Optional[int] = Query(None, description="Filter by Customer ID"),
+    customer_name: Optional[str] = Query(None, description="Filter by Customer Name"),
     item_id: Optional[int] = Query(None, description="Filter by Item ID"),
+    item_name: Optional[str] = Query(None, description="Filter by Item Name"),
     invoice_no: Optional[str] = Query(None, description="Filter by Invoice Number"),
     date_from: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
     date_to: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
@@ -42,6 +46,16 @@ def sales_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if customer_id is None and customer_name:
+        cust = get_customer_by_name(db, customer_name)
+        if cust:
+            customer_id = cust.id
+
+    if item_id is None and item_name:
+        itm = get_item_by_name(db, item_name)
+        if itm:
+            item_id = itm.id
+
     report = get_sales_report(
         db=db,
         customer_id=customer_id,
@@ -181,6 +195,7 @@ def inventory_report(
 )
 def margin_report(
     customer_id: Optional[int] = Query(None, description="Filter by Customer ID"),
+    customer_name: Optional[str] = Query(None, description="Filter by Customer Name"),
     customer_request_id: Optional[int] = Query(None, description="Filter by Customer Request ID"),
     date_from: Optional[date] = Query(None, description="Filter request creation from date"),
     date_to: Optional[date] = Query(None, description="Filter request creation to date"),
@@ -188,6 +203,11 @@ def margin_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if customer_id is None and customer_name:
+        cust = get_customer_by_name(db, customer_name)
+        if cust:
+            customer_id = cust.id
+
     report = get_margin_report(
         db=db,
         customer_id=customer_id,

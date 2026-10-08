@@ -23,12 +23,16 @@ export default function Customers() {
 
   const save = () => {
     if (!draft.name.trim()) return toast.warning('Please enter the customer name.')
+    const phoneDigits = (draft.phone || '').replace(/\D/g, '')
+    if (!phoneDigits) return toast.warning('Please enter the 10-digit mobile number.')
+    if (phoneDigits.length !== 10) return toast.warning('Mobile number must be exactly 10 digits.')
     if (!/^\S+@\S+\.\S+$/.test(draft.email || '')) return toast.warning('Please enter a valid email address.')
     const isDup = (state.customers || []).some(
       (c) => c.name && c.name.trim().toLowerCase() === draft.name.trim().toLowerCase() && String(c.id) !== String(draft.id)
     )
     if (isDup) return toast.warning(`A customer named "${draft.name.trim()}" already exists.`)
-    dispatch({ type: 'MASTER_SAVE', collection: 'customers', codeType: 'CUS', record: draft })
+    const updatedDraft = { ...draft, phone: phoneDigits }
+    dispatch({ type: 'MASTER_SAVE', collection: 'customers', codeType: 'CUS', record: updatedDraft })
     toast.success(draft.id ? 'Customer updated successfully.' : 'Customer created successfully.')
     setDraft(null)
   }
@@ -52,12 +56,15 @@ export default function Customers() {
       title: 'Customer',
       dataIndex: 'name',
       sorter: true,
-      render: (v, r) => (
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 550 }}>{v}</div>
-          <div className="dim" style={{ fontSize: 11.5 }}>{r.paymentTerms}</div>
-        </div>
-      ),
+      render: (v, r) => {
+        const terms = r.paymentTerms && r.paymentTerms.trim().toLowerCase() !== 'string' ? r.paymentTerms.trim() : null
+        return (
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 550 }}>{v}</div>
+            {terms && <div className="dim" style={{ fontSize: 11.5 }}>{terms}</div>}
+          </div>
+        )
+      },
     },
     { title: 'Contact', dataIndex: 'contactPerson', width: 150 },
     { title: 'Phone', dataIndex: 'phone', width: 148, render: (v) => <span className="num">{v}</span> },
@@ -146,8 +153,13 @@ export default function Customers() {
                   </Field>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Field label="Phone">
-                    <Input value={draft.phone} onChange={(e) => set({ phone: e.target.value })} />
+                  <Field label="Mobile number" required help="Must be exactly 10 digits">
+                    <Input
+                      value={draft.phone}
+                      maxLength={10}
+                      placeholder="10-digit mobile number"
+                      onChange={(e) => set({ phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    />
                   </Field>
                 </Col>
                 <Col xs={24} md={9}>

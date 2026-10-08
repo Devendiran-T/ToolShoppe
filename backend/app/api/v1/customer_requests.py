@@ -6,6 +6,8 @@ from app.core.auth import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.models.customer import Customer
+from app.crud.customer import get_customer_by_name
+from app.crud.item import get_item_by_name, get_item_by_id
 from app.schemas.customer_request import (
     CustomerRequestCreate, CustomerRequestUpdate, CustomerRequestOut
 )
@@ -36,12 +38,44 @@ def create_new_cr(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    customer = db.query(Customer).filter(Customer.id == cr_in.customer_id).first()
+    customer = None
+    if cr_in.customer_id is not None:
+        customer = db.query(Customer).filter(Customer.id == cr_in.customer_id).first()
+    if not customer and cr_in.customer_name:
+        customer = get_customer_by_name(db, cr_in.customer_name)
     if not customer:
+        ident = cr_in.customer_name or cr_in.customer_id
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Customer with ID {cr_in.customer_id} does not exist.",
+            detail=f"Customer '{ident}' does not exist.",
         )
+    cr_in.customer_id = customer.id
+
+    for line in cr_in.lines:
+        if line.item_id is None and line.item_name:
+            item = get_item_by_name(db, line.item_name)
+            if not item:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Item '{line.item_name}' does not exist.",
+                )
+            line.item_id = item.id
+            if not line.unit and item.unit:
+                line.unit = item.unit
+        elif line.item_id is not None:
+            item = get_item_by_id(db, line.item_id)
+            if not item:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Item with ID {line.item_id} does not exist.",
+                )
+            if not line.unit and item.unit:
+                line.unit = item.unit
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Each line must provide either item_name or item_id.",
+            )
 
     cr = create_customer_request(db, cr_in, user_id=current_user.id)
     return SuccessResponse(
@@ -120,6 +154,28 @@ def update_cr(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Customer Request with ID {cr_id} not found.",
         )
+
+    if cr_in.customer_name and cr_in.customer_id is None:
+        customer = get_customer_by_name(db, cr_in.customer_name)
+        if not customer:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Customer '{cr_in.customer_name}' does not exist.",
+            )
+        cr_in.customer_id = customer.id
+
+    if cr_in.lines:
+        for line in cr_in.lines:
+            if line.item_id is None and line.item_name:
+                item = get_item_by_name(db, line.item_name)
+                if not item:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Item '{line.item_name}' does not exist.",
+                    )
+                line.item_id = item.id
+                if not line.unit and item.unit:
+                    line.unit = item.unit
 
     try:
         updated = update_customer_request(db, cr, cr_in)

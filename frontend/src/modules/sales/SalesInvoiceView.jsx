@@ -50,8 +50,15 @@ export default function SalesInvoiceView() {
     remarks: '',
   })
 
-  const si = (s.salesInvoices || []).find((x) => String(x.id) === String(id))
+  const si = (s.salesInvoices || []).find((x) => String(x.id) === String(id) || (x.localId && String(x.localId) === String(id)) || String(x.siNo) === String(id))
   useDocLabel(si ? si.siNo : null)
+
+  React.useEffect(() => {
+    if (si && String(si.id) !== String(id) && typeof si.id !== 'undefined') {
+      nav(`/sales/invoice/${si.id}`, { replace: true })
+    }
+  }, [si, id, nav])
+
   if (!si) return <Navigate to="/sales/invoice" replace />
 
   const cust = (s.customers || []).find((c) => String(c.id) === String(si.customerId))

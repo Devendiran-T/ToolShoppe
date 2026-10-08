@@ -40,12 +40,27 @@ export function deriveCrStage(s, crId) {
 }
 
 export function derive(s) {
-  if (!s || !Array.isArray(s.customerRequests)) return s
-  s.customerRequests.forEach((cr) => {
-    if (cr && cr.id) {
-      cr.stage = deriveCrStage(s, cr.id)
-    }
-  })
+  if (!s) return s
+  if (Array.isArray(s.customerRequests)) {
+    s.customerRequests.forEach((cr) => {
+      if (cr && cr.id) {
+        cr.stage = deriveCrStage(s, cr.id)
+      }
+    })
+  }
+  if (Array.isArray(s.grns)) {
+    const invoicedGrnIds = new Set(
+      (s.purchaseInvoices || [])
+        .map((pi) => pi && (pi.grnId || pi.grn_id))
+        .filter(Boolean)
+        .map(String)
+    )
+    s.grns.forEach((g) => {
+      if (g && g.id) {
+        g.status = invoicedGrnIds.has(String(g.id)) ? 'Invoiced' : 'Received'
+      }
+    })
+  }
   return s
 }
 
@@ -184,6 +199,7 @@ export function reducer(state, action) {
     }
 
     /* ---------------- 3.3 Quotation Comparison ---------------- */
+    case 'QC_AUTO_SELECT':
     case 'QC_CREATE': {
       const { prId } = action
       const pr = find(s.purchaseRequests, prId)
@@ -275,6 +291,8 @@ export function reducer(state, action) {
     case 'CQ_RESEND': {
       const cq = find(s.customerQuotations, action.cqId)
       if (!cq) return state
+      cq.status = 'Sent'
+      cq.sentAt = new Date().toISOString()
       const cust = find(s.customers, cq.customerId)
       if (cust && cust.email) {
         logEmail(s, {

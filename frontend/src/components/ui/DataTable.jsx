@@ -13,6 +13,36 @@ import { EmptyState, ErrorState, TableSkeleton } from './States.jsx'
  *   numeric: true  → right-aligned, tabular figures
  *   sorter:  true  → auto string/number sorter on dataIndex
  */
+export function defaultSortRecent(list) {
+  if (!Array.isArray(list)) return list
+  return [...list].sort((a, b) => {
+    // 1. Compare dates if present
+    const dateA = a.date || a.created_at || a.sent_at || a.dispatch_date || a.invoice_date || a.supplierInvDate || ''
+    const dateB = b.date || b.created_at || b.sent_at || b.dispatch_date || b.invoice_date || b.supplierInvDate || ''
+    if (dateA && dateB && dateA !== dateB) {
+      return String(dateB).localeCompare(String(dateA))
+    }
+    // 2. Local/temporary IDs on top
+    if (typeof a.id === 'string' && typeof b.id === 'number') return -1
+    if (typeof a.id === 'number' && typeof b.id === 'string') return 1
+
+    // 3. Compare numeric IDs descending
+    const numA = Number(a.id)
+    const numB = Number(b.id)
+    if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+      return numB - numA
+    }
+
+    // 4. Document number descending (e.g. PI-0008, CR-043)
+    const docA = a.crNo || a.prNo || a.vqNo || a.qcNo || a.cqNo || a.soNo || a.poNo || a.grnNo || a.inwNo || a.outNo || a.siNo || a.piNo || a.code || ''
+    const docB = b.crNo || b.prNo || b.vqNo || b.qcNo || b.cqNo || b.soNo || b.poNo || b.grnNo || b.inwNo || b.outNo || b.siNo || b.piNo || b.code || ''
+    if (docA && docB && docA !== docB) {
+      return String(docB).localeCompare(String(docA), undefined, { numeric: true })
+    }
+    return 0
+  })
+}
+
 export default function DataTable({
   columns,
   data,
@@ -68,7 +98,7 @@ export default function DataTable({
         return !d.isBefore(range[0], 'day') && !d.isAfter(range[1], 'day')
       })
     }
-    return out
+    return defaultSortRecent(out)
   }, [data, q, sel, range, filters, searchKeys, showRange, rangeKey])
 
   const cols = useMemo(() => {

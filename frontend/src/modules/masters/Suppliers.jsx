@@ -24,12 +24,16 @@ export default function Suppliers() {
 
   const save = () => {
     if (!draft.name.trim()) return toast.warning('Please enter the supplier name.')
+    const phoneDigits = (draft.phone || '').replace(/\D/g, '')
+    if (!phoneDigits) return toast.warning('Please enter the 10-digit mobile number.')
+    if (phoneDigits.length !== 10) return toast.warning('Mobile number must be exactly 10 digits.')
     if (!/^\S+@\S+\.\S+$/.test(draft.email || '')) return toast.warning('Please enter a valid email address.')
     const isDup = (state.suppliers || []).some(
       (s) => s.name && s.name.trim().toLowerCase() === draft.name.trim().toLowerCase() && String(s.id) !== String(draft.id)
     )
     if (isDup) return toast.warning(`A supplier named "${draft.name.trim()}" already exists.`)
-    dispatch({ type: 'MASTER_SAVE', collection: 'suppliers', codeType: 'SUP', record: draft })
+    const updatedDraft = { ...draft, phone: phoneDigits }
+    dispatch({ type: 'MASTER_SAVE', collection: 'suppliers', codeType: 'SUP', record: updatedDraft })
     toast.success(draft.id ? 'Supplier updated successfully.' : 'Supplier created successfully.')
     setDraft(null)
   }
@@ -152,8 +156,13 @@ export default function Suppliers() {
                   </Field>
                 </Col>
                 <Col xs={24} md={8}>
-                  <Field label="Phone">
-                    <Input value={draft.phone} onChange={(e) => set({ phone: e.target.value })} />
+                  <Field label="Mobile number" required help="Must be exactly 10 digits">
+                    <Input
+                      value={draft.phone}
+                      maxLength={10}
+                      placeholder="10-digit mobile number"
+                      onChange={(e) => set({ phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                    />
                   </Field>
                 </Col>
                 <Col xs={24} md={9}>

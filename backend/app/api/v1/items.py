@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.crud.item import (
     get_item_by_id,
+    get_item_by_name,
     get_items,
     create_item,
     update_item,
@@ -67,21 +68,23 @@ def list_items(
 
 
 @router.get(
-    "/{item_id}",
+    "/{item_name}",
     response_model=SuccessResponse[ItemOut],
     summary="Get Item Details",
-    description="Retrieve a single item master by its numeric ID."
+    description="Retrieve a single item master by its name, code, or numeric ID."
 )
 def get_item(
-    item_id: int,
+    item_name: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    item = get_item_by_id(db, item_id)
+    item = get_item_by_name(db, item_name)
+    if not item and item_name.isdigit():
+        item = get_item_by_id(db, int(item_name))
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Item with ID {item_id} not found.",
+            detail=f"Item '{item_name}' not found.",
         )
     return SuccessResponse(
         success=True,
@@ -91,22 +94,24 @@ def get_item(
 
 
 @router.put(
-    "/{item_id}",
+    "/{item_name}",
     response_model=SuccessResponse[ItemOut],
     summary="Update Item",
-    description="Update fields of an existing item master record."
+    description="Update fields of an existing item master record by name, code, or numeric ID."
 )
 def update_existing_item(
-    item_id: int,
+    item_name: str,
     item_in: ItemUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    item = get_item_by_id(db, item_id)
+    item = get_item_by_name(db, item_name)
+    if not item and item_name.isdigit():
+        item = get_item_by_id(db, int(item_name))
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Item with ID {item_id} not found.",
+            detail=f"Item '{item_name}' not found.",
         )
 
     updated = update_item(db, item, item_in)
@@ -118,26 +123,57 @@ def update_existing_item(
 
 
 @router.patch(
-    "/{item_id}/status",
+    "/{item_name}/status",
     response_model=SuccessResponse[ItemOut],
     summary="Toggle Item Status (Soft Delete)",
-    description="Activate or deactivate an item master. Records are soft-deleted and never physically removed."
+    description="Activate or deactivate an item master by name, code, or numeric ID."
 )
 def change_item_status(
-    item_id: int,
+    item_name: str,
     status_in: ItemStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    item = get_item_by_id(db, item_id)
+    item = get_item_by_name(db, item_name)
+    if not item and item_name.isdigit():
+        item = get_item_by_id(db, int(item_name))
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Item with ID {item_id} not found.",
+            detail=f"Item '{item_name}' not found.",
         )
 
     updated = update_item_status(db, item, status_in.status)
     status_label = "activated" if status_in.status else "deactivated"
+    return SuccessResponse(
+        success=True,
+        message=f"Item has been {status_label} successfully",
+        data=ItemOut.model_validate(updated),
+    )
+
+
+@router.patch(
+    "/{item_name}/toggle-status",
+    response_model=SuccessResponse[ItemOut],
+    summary="Toggle Item Status",
+    description="Toggle active/inactive status of an item."
+)
+def toggle_item_status(
+    item_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = get_item_by_name(db, item_name)
+    if not item and item_name.isdigit():
+        item = get_item_by_id(db, int(item_name))
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Item '{item_name}' not found.",
+        )
+
+    updated = update_item_status(db, item, not item.status)
+    status_label = "activated" if updated.status else "deactivated"
     return SuccessResponse(
         success=True,
         message=f"Item has been {status_label} successfully",

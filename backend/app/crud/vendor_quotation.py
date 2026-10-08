@@ -8,6 +8,8 @@ from app.models.purchase_request import PurchaseRequest
 from app.models.customer_request import CustomerRequestItem
 from app.models.supplier import Supplier
 from app.models.item import Item
+from app.crud.supplier import get_supplier_by_name
+from app.crud.item import get_item_by_name
 from app.schemas.vendor_quotation import VendorQuotationCreate, VendorQuotationUpdate, VendorQuotationOut, QuotationItemOut
 
 
@@ -116,6 +118,15 @@ def create_vendor_quotation(
     if not pr:
         raise ValueError(f"Purchase Request with ID {obj_in.purchase_request_id} does not exist.")
 
+    if obj_in.supplier_id is None and obj_in.supplier_name:
+        sup = get_supplier_by_name(db, obj_in.supplier_name)
+        if not sup:
+            raise ValueError(f"Supplier '{obj_in.supplier_name}' not found.")
+        obj_in.supplier_id = sup.id
+
+    if obj_in.supplier_id is None:
+        raise ValueError("Either supplier_id or supplier_name must be provided.")
+
     # Validation: Same supplier cannot quote twice for the same PR
     existing = db.query(VendorQuotation).filter(
         VendorQuotation.purchase_request_id == obj_in.purchase_request_id,
@@ -123,6 +134,16 @@ def create_vendor_quotation(
     ).first()
     if existing:
         raise ValueError("This supplier has already submitted a quotation for this Purchase Request.")
+
+    # Resolve items in lines
+    for line in obj_in.lines:
+        if line.item_id is None and line.item_name:
+            itm = get_item_by_name(db, line.item_name)
+            if not itm:
+                raise ValueError(f"Item '{line.item_name}' not found.")
+            line.item_id = itm.id
+        elif line.item_id is None:
+            raise ValueError("Each line must provide either item_id or item_name.")
 
     # Build map of item_id -> quantity from CustomerRequest items
     qty_map = {}

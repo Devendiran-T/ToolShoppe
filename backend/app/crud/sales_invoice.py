@@ -11,6 +11,8 @@ from app.models.customer_order import CustomerOrder
 from app.models.customer_request import CustomerRequest
 from app.models.customer import Customer
 from app.models.item import Item
+from app.crud.customer import get_customer_by_name
+from app.crud.item import get_item_by_name
 from app.schemas.sales_invoice import (
     SalesInvoiceCreate, SalesInvoiceOut, SalesInvoiceItemOut,
     SalesInvoicePreviewOut
@@ -227,18 +229,25 @@ def create_sales_invoice(db: Session, obj_in: SalesInvoiceCreate, user_id: Optio
         raise ValueError(f"Outward with ID {obj_in.outward_id} not found.")
 
     if outward.status == "Draft":
-        raise ValueError("Cannot create sales invoice. Selected outward is still in Draft status.")
+        outward.status = "Dispatched"
 
-    # Duplicate invoicing protection
+    # Duplicate invoicing protection - reject if already invoiced
     existing_invoice = db.query(SalesInvoice).filter(SalesInvoice.outward_id == outward.id).first()
-    if existing_invoice or outward.status == "Invoiced":
-        raise ValueError("Cannot create sales invoice. Selected outward has already been invoiced.")
+    if existing_invoice:
+        raise ValueError(f"Cannot create invoice. Outward document {outward.outward_no} has already been invoiced.")
 
     so = outward.customer_order
     cr_id = outward.customer_request_id
     cust = outward.customer
 
-    cust_id = obj_in.customer_id or outward.customer_id
+    cust_id = obj_in.customer_id
+    if not cust_id and obj_in.customer_name:
+        c_obj = get_customer_by_name(db, obj_in.customer_name)
+        if c_obj:
+            cust_id = c_obj.id
+    if not cust_id:
+        cust_id = outward.customer_id
+
     inv_date = obj_in.invoice_date or date.today()
 
     terms = obj_in.payment_terms or (cust.payment_terms if cust and cust.payment_terms else "30 Days")
@@ -277,6 +286,10 @@ def create_sales_invoice(db: Session, obj_in: SalesInvoiceCreate, user_id: Optio
 
     if lines_to_process:
         for line in lines_to_process:
+            if line.item_id is None and line.item_name:
+                itm_obj = get_item_by_name(db, line.item_name)
+                if itm_obj:
+                    line.item_id = itm_obj.id
             if line.item_id not in out_items_map:
                 raise ValueError(f"Item ID {line.item_id} is not present in Outward {outward.outward_no}.")
             out_item = out_items_map[line.item_id]

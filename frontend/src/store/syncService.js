@@ -13,6 +13,75 @@ import {
 import { derive } from './reducer.js'
 import { computeBest } from '../logic/compare.js'
 
+export function sortByRecent(list) {
+  if (!Array.isArray(list)) return list
+  return [...list].sort((a, b) => {
+    // 1. Compare dates if present
+    const dateA = a.date || a.created_at || a.sent_at || a.dispatch_date || a.invoice_date || a.supplierInvDate || ''
+    const dateB = b.date || b.created_at || b.sent_at || b.dispatch_date || b.invoice_date || b.supplierInvDate || ''
+    if (dateA && dateB && dateA !== dateB) {
+      return String(dateB).localeCompare(String(dateA))
+    }
+    // 2. Local/temporary IDs on top
+    if (typeof a.id === 'string' && typeof b.id === 'number') return -1
+    if (typeof a.id === 'number' && typeof b.id === 'string') return 1
+
+    // 3. Compare numeric IDs descending
+    const numA = Number(a.id)
+    const numB = Number(b.id)
+    if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+      return numB - numA
+    }
+
+    // 4. Document number descending (e.g. PI-0008, CR-043)
+    const docA = a.crNo || a.prNo || a.vqNo || a.qcNo || a.cqNo || a.soNo || a.poNo || a.grnNo || a.inwNo || a.outNo || a.siNo || a.piNo || a.code || ''
+    const docB = b.crNo || b.prNo || b.vqNo || b.qcNo || b.cqNo || b.soNo || b.poNo || b.grnNo || b.inwNo || b.outNo || b.siNo || b.piNo || b.code || ''
+    if (docA && docB && docA !== docB) {
+      return String(docB).localeCompare(String(docA), undefined, { numeric: true })
+    }
+    return 0
+  })
+}
+
+function mergeLocal(backendList, fallbackList, idKey = 'id', noKey = null) {
+  if (!Array.isArray(fallbackList) || fallbackList.length === 0) return sortByRecent(backendList || [])
+  if (!Array.isArray(backendList) || backendList.length === 0) return sortByRecent(fallbackList)
+
+  const fallbackByNo = new Map()
+  const fallbackById = new Map()
+  fallbackList.forEach((x) => {
+    if (!x) return
+    if (x[idKey]) fallbackById.set(String(x[idKey]), x)
+    if (noKey && x[noKey]) fallbackByNo.set(String(x[noKey]), x)
+  })
+
+  const mergedBackend = (backendList || []).map((b) => {
+    if (!b) return b
+    const matched = (noKey && b[noKey] && fallbackByNo.get(String(b[noKey]))) || fallbackById.get(String(b[idKey]))
+    if (matched) {
+      return {
+        ...matched,
+        ...b,
+        localId: matched.localId || (String(matched[idKey]) !== String(b[idKey]) ? matched[idKey] : undefined),
+      }
+    }
+    return b
+  })
+
+  const backendIds = new Set(mergedBackend.map((x) => String(x[idKey])))
+  const backendNos = noKey ? new Set(mergedBackend.map((x) => String(x[noKey])).filter(Boolean)) : null
+  const backendLocalIds = new Set(mergedBackend.map((x) => x.localId ? String(x.localId) : null).filter(Boolean))
+
+  const localOnly = fallbackList.filter((x) => {
+    if (!x) return false
+    if (backendIds.has(String(x[idKey]))) return false
+    if (backendNos && x[noKey] && backendNos.has(String(x[noKey]))) return false
+    if (backendLocalIds.has(String(x[idKey]))) return false
+    return true
+  })
+  return sortByRecent([...localOnly, ...mergedBackend])
+}
+
 export function mapBackendToFrontend(bData, fallback) {
   if (!bData) return fallback
 
@@ -20,18 +89,23 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 1. Customers
   if (Array.isArray(bData.customers) && bData.customers.length > 0) {
+    const clean = (val) => {
+      if (!val) return ''
+      const trimmed = String(val).trim()
+      return trimmed.toLowerCase() === 'string' ? '' : trimmed
+    }
     s.customers = bData.customers.map((c) => ({
       id: c.id,
       code: c.customer_code || c.code || `CUS-${c.id}`,
       name: c.name || '',
-      contactPerson: c.contact_person || c.contactPerson || '',
+      contactPerson: clean(c.contact_person || c.contactPerson),
       phone: c.phone || '',
       email: c.email || '',
-      gstin: c.gstin || '',
-      billingAddress: c.billing_address || c.billingAddress || '',
-      shippingAddress: c.shipping_address || c.shippingAddress || '',
+      gstin: clean(c.gstin),
+      billingAddress: clean(c.billing_address || c.billingAddress),
+      shippingAddress: clean(c.shipping_address || c.shippingAddress),
       markupPct: Number(c.default_markup ?? c.markupPct ?? 15),
-      paymentTerms: c.payment_terms || c.paymentTerms || '30 days',
+      paymentTerms: clean(c.payment_terms || c.paymentTerms),
       active: c.status !== false && c.active !== false,
     }))
   }
@@ -78,7 +152,7 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 4. Customer Requests
   if (Array.isArray(bData.customerRequests) && bData.customerRequests.length > 0) {
-    s.customerRequests = bData.customerRequests.map((cr) => ({
+    const backendCRs = bData.customerRequests.map((cr) => ({
       id: cr.id,
       crNo: cr.request_no || cr.crNo || `CR-${cr.id}`,
       date: (cr.created_at || '').slice(0, 10) || cr.date,
@@ -94,11 +168,12 @@ export function mapBackendToFrontend(bData, fallback) {
         unit: l.unit || 'Nos',
       })),
     }))
+    s.customerRequests = mergeLocal(backendCRs, fallback.customerRequests, 'id', 'crNo')
   }
 
   // 5. Purchase Requests (PR)
   if (Array.isArray(bData.purchaseRequests) && bData.purchaseRequests.length > 0) {
-    s.purchaseRequests = bData.purchaseRequests.filter(Boolean).map((pr) => {
+    const backendPRs = bData.purchaseRequests.filter(Boolean).map((pr) => {
       const cr = (s.customerRequests || []).find((c) => c && c.id === (pr.customer_request_id || pr.crId))
       return {
         id: pr.id,
@@ -116,11 +191,12 @@ export function mapBackendToFrontend(bData, fallback) {
         })),
       }
     })
+    s.purchaseRequests = mergeLocal(backendPRs, fallback.purchaseRequests, 'id', 'prNo')
   }
 
   // 6. Vendor Quotations (VQ)
   if (Array.isArray(bData.vendorQuotations) && bData.vendorQuotations.length > 0) {
-    s.vendorQuotations = bData.vendorQuotations.filter(Boolean).map((vq) => ({
+    const backendVQs = bData.vendorQuotations.filter(Boolean).map((vq) => ({
       id: vq.id,
       vqNo: vq.quote_reference || vq.quotation_no || vq.vqNo || `VQ-${vq.id}`,
       date: vq.quote_date || (vq.created_at || '').slice(0, 10) || vq.date,
@@ -141,6 +217,7 @@ export function mapBackendToFrontend(bData, fallback) {
         notQuoted: Boolean(l.not_quoted ?? l.notQuoted),
       })),
     }))
+    s.vendorQuotations = mergeLocal(backendVQs, fallback.vendorQuotations, 'id', 'vqNo')
   }
 
   // 7. Quotation Comparisons (QC)
@@ -174,7 +251,7 @@ export function mapBackendToFrontend(bData, fallback) {
 
   // 8. Customer Quotations (CQ)
   if (Array.isArray(bData.customerQuotations) && bData.customerQuotations.length > 0) {
-    s.customerQuotations = bData.customerQuotations.map((cq) => ({
+    const backendCQs = bData.customerQuotations.map((cq) => ({
       id: cq.id,
       cqNo: cq.quotation_no || cq.cqNo || `CQ-${cq.id}`,
       date: (cq.created_at || '').slice(0, 10) || cq.date,
@@ -193,11 +270,12 @@ export function mapBackendToFrontend(bData, fallback) {
       sentAt: cq.sent_at || cq.sentAt || null,
       total: Number(cq.grand_total ?? cq.total ?? 0),
     }))
+    s.customerQuotations = mergeLocal(backendCQs, fallback.customerQuotations, 'id', 'cqNo')
   }
 
   // 9. Customer PO / Sales Orders (SO)
   if (Array.isArray(bData.salesOrders) && bData.salesOrders.length > 0) {
-    s.salesOrders = bData.salesOrders.map((so) => ({
+    const backendOrders = bData.salesOrders.map((so) => ({
       id: so.id,
       soNo: so.order_no || so.soNo || `SO-${so.id}`,
       date: (so.created_at || '').slice(0, 10) || so.po_date || so.date,
@@ -215,11 +293,12 @@ export function mapBackendToFrontend(bData, fallback) {
       status: so.status || 'Open',
       total: Number(so.grand_total ?? so.total ?? 0),
     }))
+    s.salesOrders = mergeLocal(backendOrders, fallback.salesOrders, 'id', 'soNo')
   }
 
   // 10. Supplier Purchase Orders (PO)
   if (Array.isArray(bData.purchaseOrders) && bData.purchaseOrders.length > 0) {
-    s.purchaseOrders = bData.purchaseOrders.map((po) => ({
+    const backendPOs = bData.purchaseOrders.map((po) => ({
       id: po.id,
       poNo: po.po_no || po.poNo || `PO-${po.id}`,
       date: (po.created_at || '').slice(0, 10) || po.date,
@@ -239,35 +318,42 @@ export function mapBackendToFrontend(bData, fallback) {
       status: po.status || 'Draft',
       sentAt: po.sent_at || po.sentAt || null,
     }))
+    s.purchaseOrders = mergeLocal(backendPOs, fallback.purchaseOrders, 'id', 'poNo')
   }
 
   // 11. Goods Receipt Notes (GRN)
   if (Array.isArray(bData.grns) && bData.grns.length > 0) {
-    s.grns = bData.grns.map((g) => ({
-      id: g.id,
-      grnNo: g.grn_no || g.grnNo || `GRN-${g.id}`,
-      date: (g.received_date || g.created_at || '').slice(0, 10) || g.date,
-      poId: g.purchase_order_id || g.poId,
-      crId: g.customer_request_id || g.crId,
-      supplierId: g.supplier_id || g.supplierId,
-      supplierRef: g.challan_no || g.supplier_invoice_ref || g.supplierRef || '',
-      receivedBy: g.received_by || g.receivedBy || '',
-      remarks: g.remarks || '',
-      status: g.status || 'Received',
-      lines: (g.items || g.lines || []).map((l) => ({
-        itemId: l.item_id || l.itemId,
-        receivedQty: Number(l.received_qty ?? l.receivedQty ?? 0),
-        acceptedQty: Number(l.accepted_qty ?? l.acceptedQty ?? 0),
-        rejectedQty: Number(l.rejected_qty ?? l.rejectedQty ?? 0),
-        rate: Number(l.rate ?? 0),
-      })),
-      total: Number(g.total ?? 0),
-    }))
+    const backendGRNs = bData.grns.map((g) => {
+      const hasPI = (bData.purchaseInvoices || []).some(
+        (pi) => pi && (pi.grn_id === g.id || pi.grnId === g.id || String(pi.grn_id) === String(g.id))
+      )
+      return {
+        id: g.id,
+        grnNo: g.grn_no || g.grnNo || `GRN-${g.id}`,
+        date: (g.received_date || g.created_at || '').slice(0, 10) || g.date,
+        poId: g.purchase_order_id || g.poId,
+        crId: g.customer_request_id || g.crId,
+        supplierId: g.supplier_id || g.supplierId,
+        supplierRef: g.challan_no || g.supplier_invoice_ref || g.supplierRef || '',
+        receivedBy: g.received_by || g.receivedBy || '',
+        remarks: g.remarks || '',
+        status: hasPI ? 'Invoiced' : 'Received',
+        lines: (g.items || g.lines || []).map((l) => ({
+          itemId: l.item_id || l.itemId,
+          receivedQty: Number(l.received_qty ?? l.receivedQty ?? 0),
+          acceptedQty: Number(l.accepted_qty ?? l.acceptedQty ?? 0),
+          rejectedQty: Number(l.rejected_qty ?? l.rejectedQty ?? 0),
+          rate: Number(l.rate ?? 0),
+        })),
+        total: Number(g.total ?? 0),
+      }
+    })
+    s.grns = mergeLocal(backendGRNs, fallback.grns, 'id', 'grnNo')
   }
 
   // 12. Inward Stock
   if (Array.isArray(bData.inwards) && bData.inwards.length > 0) {
-    s.inwards = bData.inwards.filter(Boolean).map((inw) => {
+    const backendInwards = bData.inwards.filter(Boolean).map((inw) => {
       const linkedGrn = (s.grns || []).find((g) => g && (g.id === (inw.grn_id || inw.grnId)))
       return {
         id: inw.id,
@@ -287,11 +373,12 @@ export function mapBackendToFrontend(bData, fallback) {
         })),
       }
     })
+    s.inwards = mergeLocal(backendInwards, fallback.inwards, 'id', 'inwNo')
   }
 
   // 13. Outward (Delivery Challan)
   if (Array.isArray(bData.outwards) && bData.outwards.length > 0) {
-    s.outwards = bData.outwards.filter(Boolean).map((o) => ({
+    const backendOutwards = bData.outwards.filter(Boolean).map((o) => ({
       id: o.id,
       outNo: o.dc_number || o.dc_no || o.outward_no || o.outNo || `OUT-${o.id}`,
       date: (o.dispatch_date || o.created_at || '').slice(0, 10) || o.date,
@@ -310,11 +397,12 @@ export function mapBackendToFrontend(bData, fallback) {
         price: Number(l.selling_price ?? l.price ?? 0),
       })),
     }))
+    s.outwards = mergeLocal(backendOutwards, fallback.outwards, 'id', 'outNo')
   }
 
   // 14. Sales Invoices
   if (Array.isArray(bData.salesInvoices) && bData.salesInvoices.length > 0) {
-    s.salesInvoices = bData.salesInvoices.filter(Boolean).map((si) => ({
+    const backendInvoices = bData.salesInvoices.filter(Boolean).map((si) => ({
       id: si.id,
       siNo: si.invoice_no || si.siNo || `SI-${si.id}`,
       date: (si.invoice_date || si.created_at || '').slice(0, 10) || si.date,
@@ -339,11 +427,12 @@ export function mapBackendToFrontend(bData, fallback) {
         total: Number(l.line_total ?? l.total ?? 0),
       })),
     }))
+    s.salesInvoices = mergeLocal(backendInvoices, fallback.salesInvoices, 'id', 'siNo')
   }
 
   // 15. Purchase Invoices
   if (Array.isArray(bData.purchaseInvoices) && bData.purchaseInvoices.length > 0) {
-    s.purchaseInvoices = bData.purchaseInvoices.filter(Boolean).map((pi) => {
+    const backendPIs = bData.purchaseInvoices.filter(Boolean).map((pi) => {
       const linkedGrn = (s.grns || []).find((g) => g && (g.id === (pi.grn_id || pi.grnId)))
       return {
         id: pi.id,
@@ -371,11 +460,12 @@ export function mapBackendToFrontend(bData, fallback) {
         })),
       }
     })
+    s.purchaseInvoices = mergeLocal(backendPIs, fallback.purchaseInvoices, 'id', 'piNo')
   }
 
   // 16. Stock Ledger
   if (Array.isArray(bData.ledger) && bData.ledger.length > 0) {
-    s.stockLedger = bData.ledger.filter(Boolean).map((l) => {
+    const backendLedger = bData.ledger.filter(Boolean).map((l) => {
       const isOut = (l.movement_type || '').toUpperCase() === 'OUT'
       let partyId = null
       if (isOut) {
@@ -399,11 +489,12 @@ export function mapBackendToFrontend(bData, fallback) {
         partyId,
       }
     })
+    s.stockLedger = mergeLocal(backendLedger, fallback.stockLedger, 'id')
   }
 
   // 17. Email Logs
   if (Array.isArray(bData.emailLog) && bData.emailLog.length > 0) {
-    s.emailLog = bData.emailLog.map((em) => {
+    const backendEmailLog = bData.emailLog.map((em) => {
       let refType = 'PR'
       if (em.document_type === 'Customer Quotation' || em.refType === 'CQ') refType = 'CQ'
       else if (em.document_type === 'Purchase Order' || em.refType === 'PO') refType = 'PO'
@@ -429,6 +520,7 @@ export function mapBackendToFrontend(bData, fallback) {
         status: em.status || 'Sent',
       }
     })
+    s.emailLog = mergeLocal(backendEmailLog, fallback.emailLog, 'id')
   }
 
   return derive(s)
@@ -646,6 +738,44 @@ export async function syncActionToBackend(action, state) {
         break
       }
 
+      /* Sales - 05b. Customer Quotation Send / Resend Email */
+      case 'CQ_RESEND': {
+        const { cqId, subject, body } = action
+        const cq = (state.customerQuotations || []).find((q) => q.id === cqId || String(q.id) === String(cqId))
+        const cust = cq ? (state.customers || []).find((c) => c.id === cq.customerId || String(c.id) === String(cq.customerId)) : null
+        const recipient = (cust && cust.email) || null
+        const numCqId = !isNaN(Number(cqId)) ? Number(cqId) : null
+        if (numCqId) {
+          try {
+            await salesApi.sendCustomerQuotation({
+              quotation_id: numCqId,
+              recipient: recipient || undefined,
+              subject,
+              body,
+            })
+          } catch (e) {
+            if (recipient) {
+              await emailApi.sendLiveEmail({
+                recipient,
+                subject: subject || `Quotation ${cq ? cq.cqNo : ''}`,
+                body: body || 'Please find attached quotation.',
+                document_type: 'Customer Quotation',
+                document_id: numCqId,
+              }).catch(() => {})
+            }
+          }
+        } else if (recipient) {
+          await emailApi.sendLiveEmail({
+            recipient,
+            subject: subject || `Quotation ${cq ? cq.cqNo : ''}`,
+            body: body || 'Please find attached quotation.',
+            document_type: 'Customer Quotation',
+            document_id: 0,
+          }).catch(() => {})
+        }
+        break
+      }
+
       /* Sales - 06. Customer Order (SO) */
       case 'SO_CREATE': {
         const { payload } = action
@@ -708,19 +838,26 @@ export async function syncActionToBackend(action, state) {
       /* Sales - 10. Outward (Delivery Challan) */
       case 'OUT_CREATE': {
         const { payload } = action
-        if (typeof payload.soId === 'number') {
-          await salesApi.createOutward({
-            customer_order_id: payload.soId,
-            dc_number: payload.dcNo || 'DC-001',
-            dispatch_date: payload.date,
-            dispatch_mode: payload.mode || 'Road',
-            vehicle_or_courier: payload.vehicle,
-            remarks: payload.remarks,
-            items: (payload.lines || []).map((l) => ({
-              item_id: l.itemId,
-              dispatch_qty: Number(l.qty || 0),
-            })),
-          })
+        const numSoId = !isNaN(Number(payload.soId)) ? Number(payload.soId) : null
+        if (numSoId) {
+          try {
+            await salesApi.createOutward({
+              customer_order_id: numSoId,
+              dc_number: payload.dcNo || 'DC-001',
+              dispatch_date: payload.date || today(),
+              dispatch_mode: payload.mode || 'Road',
+              vehicle_or_courier: payload.vehicle || 'TN 09 BX 4471',
+              remarks: payload.remarks || '',
+              status: 'Dispatched',
+              items: (payload.lines || []).map((l) => ({
+                item_id: Number(l.itemId),
+                dispatch_qty: Number(l.qty || 0),
+                dispatched_qty: Number(l.qty || 0),
+              })),
+            })
+          } catch (err) {
+            console.warn('Backend outward creation failed:', err.message || err)
+          }
         }
         break
       }
@@ -728,13 +865,37 @@ export async function syncActionToBackend(action, state) {
       /* Sales - 11. Sales Invoice */
       case 'SI_CREATE': {
         const { payload } = action
-        if (typeof payload.outId === 'number') {
-          await salesApi.createSalesInvoice({
-            outward_id: payload.outId,
-            invoice_date: payload.date,
-            due_date: payload.dueDate,
-            payment_terms: payload.paymentTerms || '30 days',
-          })
+        let numOutId = !isNaN(Number(payload.outId)) ? Number(payload.outId) : null
+        const matchOut = state.outwards?.find((o) => o && (o.id === payload.outId || String(o.id) === String(payload.outId)))
+        if (!numOutId && matchOut && !isNaN(Number(matchOut.id))) {
+          numOutId = Number(matchOut.id)
+        }
+        if (!numOutId) {
+          try {
+            const outList = await salesApi.getOutwards({ limit: 100 })
+            const items = Array.isArray(outList) ? outList : (outList?.items || [])
+            const found = items.find((o) =>
+              (matchOut?.dcNo && (o.dc_number === matchOut.dcNo || o.dc_no === matchOut.dcNo)) ||
+              (matchOut?.soId && (o.customer_order_id === Number(matchOut.soId))) ||
+              (matchOut?.outNo && (o.outward_no === matchOut.outNo || o.dc_number === matchOut.outNo))
+            )
+            if (found && found.id) {
+              numOutId = found.id
+            }
+          } catch {}
+        }
+        if (numOutId) {
+          try {
+            await salesApi.createSalesInvoice({
+              outward_id: numOutId,
+              invoice_date: payload.date || today(),
+              due_date: payload.dueDate || addDays(today(), 30),
+              payment_terms: payload.paymentTerms || '30 days',
+            })
+            window.dispatchEvent(new CustomEvent('ERP_SYNC_TRIGGER'))
+          } catch (err) {
+            console.warn('Backend invoice creation failed:', err.message || err)
+          }
         }
         break
       }
@@ -742,13 +903,36 @@ export async function syncActionToBackend(action, state) {
       /* Purchase - 12. Purchase Invoice */
       case 'PI_CREATE': {
         const { payload } = action
-        if (typeof payload.grnId === 'number') {
-          await purchaseApi.createPurchaseInvoice({
-            grn_id: payload.grnId,
-            supplier_invoice_no: payload.supplierInvNo || 'PINV-001',
-            supplier_invoice_date: payload.supplierInvDate || payload.date,
-            due_date: payload.dueDate,
-          })
+        let numGrnId = !isNaN(Number(payload.grnId)) ? Number(payload.grnId) : null
+        const matchGrn = state.grns?.find((g) => g && (g.id === payload.grnId || String(g.id) === String(payload.grnId)))
+        if (!numGrnId && matchGrn && !isNaN(Number(matchGrn.id))) {
+          numGrnId = Number(matchGrn.id)
+        }
+        if (!numGrnId) {
+          try {
+            const grnList = await purchaseApi.getGRNs({ limit: 100 })
+            const items = Array.isArray(grnList) ? grnList : (grnList?.items || [])
+            const found = items.find((g) =>
+              (matchGrn?.grnNo && (g.grn_no === matchGrn.grnNo)) ||
+              (matchGrn?.poId && (g.purchase_order_id === Number(matchGrn.poId)))
+            )
+            if (found && found.id) {
+              numGrnId = found.id
+            }
+          } catch {}
+        }
+        if (numGrnId) {
+          try {
+            await purchaseApi.createPurchaseInvoice({
+              grn_id: numGrnId,
+              supplier_invoice_no: payload.supplierInvNo || 'PINV-001',
+              supplier_invoice_date: payload.supplierInvDate || payload.date || today(),
+              due_date: payload.dueDate || addDays(today(), 30),
+            })
+            window.dispatchEvent(new CustomEvent('ERP_SYNC_TRIGGER'))
+          } catch (err) {
+            console.warn('Backend purchase invoice creation failed:', err.message || err)
+          }
         }
         break
       }

@@ -13,6 +13,7 @@ from app.schemas.customer_quotation import (
     CustomerQuotationSendRequest, CustomerQuotationResendRequest
 )
 from app.utils.pricing import compute_customer_price, compute_margin_pct, round_decimal
+from app.core.email import send_live_email
 
 
 def generate_cq_code(db: Session) -> str:
@@ -250,12 +251,17 @@ def send_customer_quotation(
     cq.status = "Sent"
     cq.sent_at = datetime.utcnow()
 
+    delivered = False
+    if recipient:
+        delivered = send_live_email(recipients=recipient, subject=obj_in.subject, body=obj_in.body)
+
     email_log = EmailLog(
         document_type="Customer Quotation",
         document_id=cq.id,
         recipient=recipient,
         subject=obj_in.subject,
         body=obj_in.body,
+        status="Sent" if delivered else "Failed",
         sent_at=cq.sent_at,
     )
     db.add(email_log)
@@ -286,12 +292,17 @@ def resend_customer_quotation(
     cq.status = "Sent"
     cq.sent_at = datetime.utcnow()
 
+    delivered = False
+    if recipient:
+        delivered = send_live_email(recipients=recipient, subject=subject, body=body)
+
     email_log = EmailLog(
         document_type="Customer Quotation",
         document_id=cq.id,
         recipient=recipient,
         subject=subject,
         body=body,
+        status="Sent" if delivered else "Failed",
         sent_at=cq.sent_at,
     )
     db.add(email_log)

@@ -13,8 +13,15 @@ export default function RequestView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const pr = (s.purchaseRequests || []).find((x) => String(x.id) === String(id))
+  const pr = (s.purchaseRequests || []).find((x) => String(x.id) === String(id) || (x.localId && String(x.localId) === String(id)) || String(x.prNo) === String(id))
   useDocLabel(pr ? pr.prNo : null)
+
+  React.useEffect(() => {
+    if (pr && String(pr.id) !== String(id) && typeof pr.id !== 'undefined') {
+      nav(`/purchase/request/${pr.id}`, { replace: true })
+    }
+  }, [pr, id, nav])
+
   if (!pr) return <Navigate to="/purchase/request" replace />
 
   const cr = getCR(s, pr.crId)

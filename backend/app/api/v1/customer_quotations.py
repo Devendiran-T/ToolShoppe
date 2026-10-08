@@ -10,6 +10,7 @@ from app.schemas.customer_quotation import (
     CustomerQuotationSendRequest, CustomerQuotationResendRequest
 )
 from app.schemas.response import SuccessResponse
+from app.crud.customer import get_customer_by_name
 from app.crud.customer_quotation import (
     get_customer_quotation_by_id, get_customer_quotations,
     update_customer_quotation, send_customer_quotation,
@@ -32,10 +33,16 @@ def list_quotations(
     limit: int = Query(100, ge=1, le=1000),
     status: Optional[str] = Query(None, description="Filter by status (Draft, Sent, Accepted, Rejected, Expired)"),
     customer_id: Optional[int] = Query(None, description="Filter by Customer ID"),
+    customer_name: Optional[str] = Query(None, description="Filter by Customer Name"),
     request_id: Optional[int] = Query(None, description="Filter by Customer Request ID"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    if customer_id is None and customer_name:
+        cust = get_customer_by_name(db, customer_name)
+        if cust:
+            customer_id = cust.id
+
     items, total = get_customer_quotations(
         db=db, skip=skip, limit=limit, status=status, customer_id=customer_id, request_id=request_id
     )

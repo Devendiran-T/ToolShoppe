@@ -18,7 +18,12 @@ export default function PurchaseInvoice() {
   const [params, setParams] = useSearchParams()
   const [draft, setDraft] = useState(null)
 
-  const openGrns = useMemo(() => state.grns.filter((g) => g.status === 'Received'), [state])
+  const openGrns = useMemo(() => {
+    return (state.grns || []).filter((g) => {
+      if (draft && String(g.id) === String(draft.grnId)) return true
+      return g.status === 'Received'
+    })
+  }, [state.grns, draft])
 
   const startFor = (grnId) => {
     const g = state.grns.find((x) => x.id === grnId)
@@ -180,8 +185,15 @@ export default function PurchaseInvoice() {
                       value={draft.grnId || undefined}
                       onChange={startFor}
                       options={openGrns.map((g) => {
-                        const cr = getCR(state, g.crId)
-                        return { value: g.id, label: `${g.grnNo} — ${cr ? cr.crNo : ''} — ${supplierName(state, g.supplierId)}` }
+                        const po = (state.purchaseOrders || []).find((p) => String(p.id) === String(g.poId))
+                        const crId = g.crId || (po ? po.crId : null)
+                        const cr = getCR(state, crId)
+                        const sup = supplierName(state, g.supplierId || (po ? po.supplierId : null))
+                        const parts = [g.grnNo]
+                        if (po && po.poNo) parts.push(po.poNo)
+                        if (cr && cr.crNo) parts.push(cr.crNo)
+                        if (sup && sup !== '—') parts.push(sup)
+                        return { value: g.id, label: parts.join(' — ') }
                       })}
                     />
                   </Field>

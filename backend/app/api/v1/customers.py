@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.crud.customer import (
     get_customer_by_id,
+    get_customer_by_name,
     get_customer_by_email,
     get_customers,
     create_customer,
@@ -75,21 +76,23 @@ def list_customers(
 
 
 @router.get(
-    "/{customer_id}",
+    "/{customer_name}",
     response_model=SuccessResponse[CustomerOut],
     summary="Get Customer Details",
-    description="Retrieve a single customer by their numeric ID."
+    description="Retrieve a single customer by their name, customer code, or numeric ID."
 )
 def get_customer(
-    customer_id: int,
+    customer_name: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    customer = get_customer_by_id(db, customer_id)
+    customer = get_customer_by_name(db, customer_name)
+    if not customer and customer_name.isdigit():
+        customer = get_customer_by_id(db, int(customer_name))
     if not customer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Customer with ID {customer_id} not found.",
+            detail=f"Customer '{customer_name}' not found.",
         )
     return SuccessResponse(
         success=True,
@@ -99,28 +102,30 @@ def get_customer(
 
 
 @router.put(
-    "/{customer_id}",
+    "/{customer_name}",
     response_model=SuccessResponse[CustomerOut],
     summary="Update Customer",
-    description="Update fields of an existing customer."
+    description="Update fields of an existing customer by name, code, or numeric ID."
 )
 def update_existing_customer(
-    customer_id: int,
+    customer_name: str,
     customer_in: CustomerUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    customer = get_customer_by_id(db, customer_id)
+    customer = get_customer_by_name(db, customer_name)
+    if not customer and customer_name.isdigit():
+        customer = get_customer_by_id(db, int(customer_name))
     if not customer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Customer with ID {customer_id} not found.",
+            detail=f"Customer '{customer_name}' not found.",
         )
 
     # If updating email, ensure it does not collide with another customer
     if customer_in.email and customer_in.email != customer.email:
         conflict = get_customer_by_email(db, customer_in.email)
-        if conflict and conflict.id != customer_id:
+        if conflict and conflict.id != customer.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Email '{customer_in.email}' is already registered by another customer.",
@@ -135,26 +140,57 @@ def update_existing_customer(
 
 
 @router.patch(
-    "/{customer_id}/status",
+    "/{customer_name}/status",
     response_model=SuccessResponse[CustomerOut],
     summary="Toggle Customer Status (Soft Delete)",
-    description="Activate or deactivate a customer. Records are soft-deleted and never physically removed."
+    description="Activate or deactivate a customer by name, code, or numeric ID."
 )
 def change_customer_status(
-    customer_id: int,
+    customer_name: str,
     status_in: CustomerStatusUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    customer = get_customer_by_id(db, customer_id)
+    customer = get_customer_by_name(db, customer_name)
+    if not customer and customer_name.isdigit():
+        customer = get_customer_by_id(db, int(customer_name))
     if not customer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Customer with ID {customer_id} not found.",
+            detail=f"Customer '{customer_name}' not found.",
         )
 
     updated = update_customer_status(db, customer, status_in.status)
     status_label = "activated" if status_in.status else "deactivated"
+    return SuccessResponse(
+        success=True,
+        message=f"Customer has been {status_label} successfully",
+        data=CustomerOut.model_validate(updated),
+    )
+
+
+@router.patch(
+    "/{customer_name}/toggle-status",
+    response_model=SuccessResponse[CustomerOut],
+    summary="Toggle Customer Status",
+    description="Toggle active/inactive status of a customer."
+)
+def toggle_customer_status(
+    customer_name: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    customer = get_customer_by_name(db, customer_name)
+    if not customer and customer_name.isdigit():
+        customer = get_customer_by_id(db, int(customer_name))
+    if not customer:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Customer '{customer_name}' not found.",
+        )
+
+    updated = update_customer_status(db, customer, not customer.status)
+    status_label = "activated" if updated.status else "deactivated"
     return SuccessResponse(
         success=True,
         message=f"Customer has been {status_label} successfully",

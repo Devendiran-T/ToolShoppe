@@ -12,8 +12,15 @@ export default function PurchaseOrderView() {
   const { id } = useParams()
   const nav = useNavigate()
   const s = useStore()
-  const po = (s.purchaseOrders || []).find((x) => String(x.id) === String(id))
+  const po = (s.purchaseOrders || []).find((x) => String(x.id) === String(id) || (x.localId && String(x.localId) === String(id)) || String(x.poNo) === String(id))
   useDocLabel(po ? po.poNo : null)
+
+  React.useEffect(() => {
+    if (po && String(po.id) !== String(id) && typeof po.id !== 'undefined') {
+      nav(`/purchase/purchase-order/${po.id}`, { replace: true })
+    }
+  }, [po, id, nav])
+
   if (!po) return <Navigate to="/purchase/purchase-order" replace />
 
   const cr = getCR(s, po.crId)

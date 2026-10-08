@@ -1,7 +1,8 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.openapi.docs import get_swagger_ui_html, get_swagger_ui_oauth2_redirect_html
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -155,7 +156,7 @@ app = FastAPI(
         "6. **5. Reports & Tracking**: Analytics reports with CSV export, audit trail, and email logs.\n"
     ),
     version="2.0.0",
-    docs_url="/docs",
+    docs_url=None,
     redoc_url="/redoc",
     openapi_url="/openapi.json",
     openapi_tags=tags_metadata,
@@ -295,6 +296,64 @@ app.include_router(email_logs_api_router)
 
 
 
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    response = get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=f"{app.title} - Swagger UI",
+        oauth2_redirect_url="/docs/oauth2-redirect",
+        swagger_js_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui-bundle.js",
+        swagger_css_url="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5/swagger-ui.css",
+        swagger_ui_parameters={"persistAuthorization": True},
+    )
+
+    custom_injection = """
+    <style>
+      /* Transform button to 'Authorized' with solid green background when authenticated */
+      .swagger-ui .btn.authorize.locked {
+        background-color: #059669 !important;
+        border-color: #047857 !important;
+        color: #ffffff !important;
+      }
+      .swagger-ui .btn.authorize.locked span {
+        display: none !important;
+      }
+      .swagger-ui .btn.authorize.locked::before {
+        content: "Authorized " !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        margin-right: 6px !important;
+      }
+      .swagger-ui .btn.authorize.locked svg {
+        fill: #ffffff !important;
+      }
+    </style>
+    <script>
+      document.addEventListener("DOMContentLoaded", function() {
+        const updateAuthBtn = () => {
+          const lockedBtn = document.querySelector('.btn.authorize.locked');
+          if (lockedBtn) {
+            const span = lockedBtn.querySelector('span');
+            if (span && span.textContent !== 'Authorized') {
+              span.textContent = 'Authorized';
+            }
+          }
+        };
+        const observer = new MutationObserver(updateAuthBtn);
+        observer.observe(document.body, { childList: true, subtree: true });
+        setInterval(updateAuthBtn, 1000);
+      });
+    </script>
+    """
+    html_content = response.body.decode("utf-8").replace("</head>", f"{custom_injection}\n</head>")
+    return HTMLResponse(content=html_content)
+
+
+@app.get("/docs/oauth2-redirect", include_in_schema=False)
+async def swagger_ui_redirect():
+    return get_swagger_ui_oauth2_redirect_html()
+
+
 @app.get(
     "/",
     summary="Backend Health & Welcome",
@@ -318,3 +377,4 @@ def root():
         "docs": "/docs",
         "redoc": "/redoc",
     }
+

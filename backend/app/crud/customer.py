@@ -22,6 +22,33 @@ def get_customer_by_id(db: Session, customer_id: int) -> Optional[Customer]:
     return db.query(Customer).filter(Customer.id == customer_id).first()
 
 
+def get_customer_by_name(db: Session, name: str) -> Optional[Customer]:
+    """
+    Retrieve customer by exact/case-insensitive name, customer code, or numeric ID.
+    """
+    if not name:
+        return None
+    clean = str(name).strip()
+    # 1. Exact case-insensitive name match
+    cust = db.query(Customer).filter(Customer.name.ilike(clean)).first()
+    if cust:
+        return cust
+    # 2. Customer code match
+    cust = db.query(Customer).filter(Customer.customer_code.ilike(clean)).first()
+    if cust:
+        return cust
+    # 3. Numeric ID fallback
+    if clean.isdigit():
+        cust = db.query(Customer).filter(Customer.id == int(clean)).first()
+        if cust:
+            return cust
+    # 4. Partial name match fallback
+    cust = db.query(Customer).filter(Customer.name.ilike(f"%{clean}%")).first()
+    if cust:
+        return cust
+    return None
+
+
 def get_customer_by_code(db: Session, code: str) -> Optional[Customer]:
     """Retrieve customer by code."""
     return db.query(Customer).filter(Customer.customer_code == code).first()
