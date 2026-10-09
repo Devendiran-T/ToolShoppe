@@ -140,3 +140,11 @@ def update_supplier_status(db: Session, db_obj: Supplier, status: bool) -> Suppl
     db.commit()
     db.refresh(db_obj)
     return db_obj
+
+
+def delete_supplier(db: Session, db_obj: Supplier) -> Supplier:
+    """Permanently delete a supplier record."""
+    db.delete(db_obj)
+    db.commit()
+    return db_obj
+

@@ -123,22 +123,29 @@ def send_live_email_endpoint(
 ):
     from app.core.email import send_live_email
 
-    delivered = send_live_email(recipients=req.recipient, subject=req.subject, body=req.body)
+    delivery_res = send_live_email(recipients=req.recipient, subject=req.subject, body=req.body)
     log = EmailLog(
         document_type=req.document_type or "General",
         document_id=req.document_id or 0,
         recipient=req.recipient,
         subject=req.subject,
         body=req.body,
-        status="Sent" if delivered else "Failed",
+        status=delivery_res.status,
+        error_message=delivery_res.error_message,
     )
     db.add(log)
     db.commit()
     db.refresh(log)
 
+    msg = "Real email dispatched successfully."
+    if delivery_res.status == "Simulated":
+        msg = "Email recorded in simulation mode (SMTP not enabled or credentials missing)."
+    elif delivery_res.status == "Failed":
+        msg = f"Failed to send email: {delivery_res.error_message}"
+
     return SuccessResponse(
-        success=delivered,
-        message="Real email dispatched successfully." if delivered else "Failed to send email via SMTP.",
+        success=delivery_res.success,
+        message=msg,
         data=EmailLogOut.model_validate(log),
     )
 

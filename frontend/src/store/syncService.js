@@ -52,12 +52,13 @@ function mergeLocal(backendList, fallbackList, idKey = 'id', noKey = null) {
   fallbackList.forEach((x) => {
     if (!x) return
     if (x[idKey]) fallbackById.set(String(x[idKey]), x)
-    if (noKey && x[noKey]) fallbackByNo.set(String(x[noKey]), x)
+    if (noKey && x[noKey]) fallbackByNo.set(String(x[noKey]).trim().toLowerCase(), x)
   })
 
   const mergedBackend = (backendList || []).map((b) => {
     if (!b) return b
-    const matched = (noKey && b[noKey] && fallbackByNo.get(String(b[noKey]))) || fallbackById.get(String(b[idKey]))
+    const noVal = noKey && b[noKey] ? String(b[noKey]).trim().toLowerCase() : null
+    const matched = (noVal && fallbackByNo.get(noVal)) || fallbackById.get(String(b[idKey]))
     if (matched) {
       return {
         ...matched,
@@ -69,14 +70,17 @@ function mergeLocal(backendList, fallbackList, idKey = 'id', noKey = null) {
   })
 
   const backendIds = new Set(mergedBackend.map((x) => String(x[idKey])))
-  const backendNos = noKey ? new Set(mergedBackend.map((x) => String(x[noKey])).filter(Boolean)) : null
+  const backendNos = noKey ? new Set(mergedBackend.map((x) => String(x[noKey]).trim().toLowerCase()).filter(Boolean)) : null
   const backendLocalIds = new Set(mergedBackend.map((x) => x.localId ? String(x.localId) : null).filter(Boolean))
 
   const localOnly = fallbackList.filter((x) => {
     if (!x) return false
     if (backendIds.has(String(x[idKey]))) return false
-    if (backendNos && x[noKey] && backendNos.has(String(x[noKey]))) return false
+    if (backendNos && x[noKey] && backendNos.has(String(x[noKey]).trim().toLowerCase())) return false
     if (backendLocalIds.has(String(x[idKey]))) return false
+    if (backendList && backendList.length > 0 && typeof x[idKey] === 'number') {
+      return false
+    }
     return true
   })
   return sortByRecent([...localOnly, ...mergedBackend])
@@ -94,7 +98,7 @@ export function mapBackendToFrontend(bData, fallback) {
       const trimmed = String(val).trim()
       return trimmed.toLowerCase() === 'string' ? '' : trimmed
     }
-    s.customers = bData.customers.map((c) => ({
+    const backendCustomers = bData.customers.map((c) => ({
       id: c.id,
       code: c.customer_code || c.code || `CUS-${c.id}`,
       name: c.name || '',
@@ -107,12 +111,14 @@ export function mapBackendToFrontend(bData, fallback) {
       markupPct: Number(c.default_markup ?? c.markupPct ?? 15),
       paymentTerms: clean(c.payment_terms || c.paymentTerms),
       active: c.status !== false && c.active !== false,
+      date: c.created_at || c.createdAt || '',
     }))
+    s.customers = mergeLocal(backendCustomers, fallback?.customers || [], 'id', 'name')
   }
 
   // 2. Suppliers
   if (Array.isArray(bData.suppliers) && bData.suppliers.length > 0) {
-    s.suppliers = bData.suppliers.map((sup) => ({
+    const backendSuppliers = bData.suppliers.map((sup) => ({
       id: sup.id,
       code: sup.supplier_code || sup.code || `SUP-${sup.id}`,
       name: sup.name || '',
@@ -130,12 +136,14 @@ export function mapBackendToFrontend(bData, fallback) {
         : [],
       leadTimeDays: Number(sup.lead_time_days ?? sup.leadTimeDays ?? 5),
       active: sup.status !== false && sup.active !== false,
+      date: sup.created_at || sup.createdAt || '',
     }))
+    s.suppliers = mergeLocal(backendSuppliers, fallback?.suppliers || [], 'id', 'name')
   }
 
   // 3. Items
   if (Array.isArray(bData.items) && bData.items.length > 0) {
-    s.items = bData.items.map((it) => ({
+    const backendItems = bData.items.map((it) => ({
       id: it.id,
       code: it.item_code || it.code || `ITM-${it.id}`,
       name: it.name || '',
@@ -147,7 +155,9 @@ export function mapBackendToFrontend(bData, fallback) {
       taxPct: Number(it.tax_percent ?? it.taxPct ?? 18),
       lastPurchaseRate: Number(it.last_purchase_rate ?? it.lastPurchaseRate ?? 0),
       active: it.status !== false && it.active !== false,
+      date: it.created_at || it.createdAt || '',
     }))
+    s.items = mergeLocal(backendItems, fallback?.items || [], 'id', 'name')
   }
 
   // 4. Customer Requests
@@ -355,20 +365,32 @@ export function mapBackendToFrontend(bData, fallback) {
   if (Array.isArray(bData.inwards) && bData.inwards.length > 0) {
     const backendInwards = bData.inwards.filter(Boolean).map((inw) => {
       const linkedGrn = (s.grns || []).find((g) => g && (g.id === (inw.grn_id || inw.grnId)))
+      const linkedPo = (s.purchaseOrders || []).find((p) => p && (p.id === (inw.po_id || inw.purchase_order_id || (linkedGrn ? linkedGrn.poId : null))))
+      const linkedCr = (s.customerRequests || []).find((c) => c && (c.id === (inw.customer_request_id || inw.crId)))
       return {
         id: inw.id,
         inwNo: inw.inward_no || inw.inwNo || `INW-${inw.id}`,
-        date: (inw.created_at || '').slice(0, 10) || inw.date,
+        date: inw.received_date || (inw.created_at || '').slice(0, 10) || inw.date,
+        receivedDate: inw.received_date || (linkedGrn ? linkedGrn.date : null),
         grnId: inw.grn_id || inw.grnId,
-        poId: inw.purchase_order_id || inw.poId || (linkedGrn ? linkedGrn.poId : null),
+        grnNo: inw.grn_no || (linkedGrn ? linkedGrn.grnNo : null),
+        poId: inw.po_id || inw.purchase_order_id || inw.poId || (linkedGrn ? linkedGrn.poId : null),
+        poNo: inw.po_no || (linkedPo ? linkedPo.poNo : null),
         crId: inw.customer_request_id || inw.crId,
+        crNo: inw.customer_request_no || (linkedCr ? linkedCr.crNo : null),
         supplierId: inw.supplier_id || (linkedGrn ? linkedGrn.supplierId : null),
+        supplierName: inw.supplier_name || null,
         status: inw.status || 'Pending',
         addedAt: inw.added_at || inw.addedAt || null,
+        totalAcceptedQty: Number(inw.total_accepted_qty ?? inw.total_qty ?? 0),
+        totalRejectedQty: Number(inw.total_rejected_qty ?? 0),
         value: Number(inw.total_value ?? inw.value ?? 0),
         lines: (inw.items || inw.lines || []).filter(Boolean).map((l) => ({
           itemId: l.item_id || l.itemId,
-          qty: Number(l.quantity ?? l.qty ?? 0),
+          receivedQty: Number(l.received_qty ?? 0),
+          qty: Number(l.accepted_qty ?? l.quantity ?? l.qty ?? 0),
+          acceptedQty: Number(l.accepted_qty ?? l.quantity ?? l.qty ?? 0),
+          rejectedQty: Number(l.rejected_qty ?? 0),
           rate: Number(l.rate ?? 0),
         })),
       }
@@ -535,6 +557,7 @@ export async function syncActionToBackend(action, state) {
       /* Masters */
       case 'MASTER_SAVE': {
         const { collection, record } = action
+        let res = null
         if (collection === 'customers') {
           const payload = {
             name: record.name,
@@ -550,15 +573,15 @@ export async function syncActionToBackend(action, state) {
           }
           const existingId = Number(record.id)
           if (!isNaN(existingId) && existingId > 0) {
-            await mastersApi.updateCustomer(existingId, payload)
+            res = await mastersApi.updateCustomer(existingId, payload)
           } else {
             const found = (state?.customers || []).find(
               (c) => c.email && c.email.toLowerCase() === (record.email || '').toLowerCase() && Number(c.id) > 0
             )
             if (found) {
-              await mastersApi.updateCustomer(Number(found.id), payload)
+              res = await mastersApi.updateCustomer(Number(found.id), payload)
             } else {
-              await mastersApi.createCustomer(payload)
+              res = await mastersApi.createCustomer(payload)
             }
           }
         } else if (collection === 'suppliers') {
@@ -575,15 +598,15 @@ export async function syncActionToBackend(action, state) {
           }
           const existingId = Number(record.id)
           if (!isNaN(existingId) && existingId > 0) {
-            await mastersApi.updateSupplier(existingId, payload)
+            res = await mastersApi.updateSupplier(existingId, payload)
           } else {
             const found = (state?.suppliers || []).find(
               (s) => s.email && s.email.toLowerCase() === (record.email || '').toLowerCase() && Number(s.id) > 0
             )
             if (found) {
-              await mastersApi.updateSupplier(Number(found.id), payload)
+              res = await mastersApi.updateSupplier(Number(found.id), payload)
             } else {
-              await mastersApi.createSupplier(payload)
+              res = await mastersApi.createSupplier(payload)
             }
           }
         } else if (collection === 'items') {
@@ -600,19 +623,20 @@ export async function syncActionToBackend(action, state) {
           }
           const existingId = Number(record.id)
           if (!isNaN(existingId) && existingId > 0) {
-            await mastersApi.updateItem(existingId, payload)
+            res = await mastersApi.updateItem(existingId, payload)
           } else {
             const found = (state?.items || []).find(
               (it) => it.code && it.code.toLowerCase() === (record.code || '').toLowerCase() && Number(it.id) > 0
             )
             if (found) {
-              await mastersApi.updateItem(Number(found.id), payload)
+              res = await mastersApi.updateItem(Number(found.id), payload)
             } else {
-              await mastersApi.createItem(payload)
+              res = await mastersApi.createItem(payload)
             }
           }
         }
-        break
+        window.dispatchEvent(new CustomEvent('ERP_SYNC_TRIGGER'))
+        return res
       }
 
       case 'MASTER_TOGGLE': {
@@ -621,6 +645,7 @@ export async function syncActionToBackend(action, state) {
           if (collection === 'customers') await mastersApi.toggleCustomer(id)
           if (collection === 'suppliers') await mastersApi.toggleSupplier(id)
           if (collection === 'items') await mastersApi.toggleItem(id)
+          window.dispatchEvent(new CustomEvent('ERP_SYNC_TRIGGER'))
         }
         break
       }
@@ -629,6 +654,7 @@ export async function syncActionToBackend(action, state) {
         const { collection, id } = action
         if (collection === 'customers') {
           await mastersApi.deleteCustomer(id)
+          window.dispatchEvent(new CustomEvent('ERP_SYNC_TRIGGER'))
         }
         break
       }
@@ -950,5 +976,6 @@ export async function syncActionToBackend(action, state) {
     }
   } catch (err) {
     console.warn(`[SyncService] Backend sync notice for ${action.type}:`, err.message || err)
+    throw err
   }
 }

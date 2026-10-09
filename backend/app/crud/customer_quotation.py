@@ -246,25 +246,31 @@ def send_customer_quotation(
     if not cq:
         raise ValueError(f"Customer Quotation with ID {quotation_id} not found.")
 
-    recipient = obj_in.recipient or (cq.customer.email if cq.customer else "customer@example.com")
+    recipient = (obj_in.recipient or (cq.customer.email if cq.customer else "")).strip()
+    if not recipient:
+        raise ValueError("Recipient email address is required.")
 
-    cq.status = "Sent"
-    cq.sent_at = datetime.utcnow()
+    delivery_res = send_live_email(recipients=recipient, subject=obj_in.subject, body=obj_in.body)
 
-    delivered = False
-    if recipient:
-        delivered = send_live_email(recipients=recipient, subject=obj_in.subject, body=obj_in.body)
-
+    now = datetime.utcnow()
     email_log = EmailLog(
         document_type="Customer Quotation",
         document_id=cq.id,
         recipient=recipient,
         subject=obj_in.subject,
         body=obj_in.body,
-        status="Sent" if delivered else "Failed",
-        sent_at=cq.sent_at,
+        status=delivery_res.status,
+        error_message=delivery_res.error_message,
+        sent_at=now,
     )
     db.add(email_log)
+
+    if delivery_res.status == "Failed":
+        db.commit()
+        raise ValueError(f"Failed to deliver customer quotation email: {delivery_res.error_message}")
+
+    cq.status = "Sent"
+    cq.sent_at = now
 
     db.commit()
     db.refresh(cq)
@@ -278,34 +284,42 @@ def resend_customer_quotation(
 ) -> CustomerQuotation:
     """
     Resend Customer Quotation:
-    - Saves new entry in EmailLog (document_type = 'Customer Quotation').
+    - Dispatches email via SMTP.
+    - Saves new entry in EmailLog (document_type = 'Customer Quotation') with status & error details.
     - Status remains 'Sent' (or updates if Draft/Expired).
     """
     cq = get_customer_quotation_by_id(db, quotation_id)
     if not cq:
         raise ValueError(f"Customer Quotation with ID {quotation_id} not found.")
 
-    recipient = obj_in.recipient or (cq.customer.email if cq.customer else "customer@example.com")
+    recipient = (obj_in.recipient or (cq.customer.email if cq.customer else "")).strip()
+    if not recipient:
+        raise ValueError("Recipient email address is required.")
+
     subject = obj_in.subject or f"Quotation {cq.quotation_no} - ToolShoppe ERP"
     body = obj_in.body or f"Dear Customer, Please find attached quotation {cq.quotation_no}."
 
-    cq.status = "Sent"
-    cq.sent_at = datetime.utcnow()
+    delivery_res = send_live_email(recipients=recipient, subject=subject, body=body)
 
-    delivered = False
-    if recipient:
-        delivered = send_live_email(recipients=recipient, subject=subject, body=body)
-
+    now = datetime.utcnow()
     email_log = EmailLog(
         document_type="Customer Quotation",
         document_id=cq.id,
         recipient=recipient,
         subject=subject,
         body=body,
-        status="Sent" if delivered else "Failed",
-        sent_at=cq.sent_at,
+        status=delivery_res.status,
+        error_message=delivery_res.error_message,
+        sent_at=now,
     )
     db.add(email_log)
+
+    if delivery_res.status == "Failed":
+        db.commit()
+        raise ValueError(f"Failed to deliver customer quotation email: {delivery_res.error_message}")
+
+    cq.status = "Sent"
+    cq.sent_at = now
 
     db.commit()
     db.refresh(cq)

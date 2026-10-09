@@ -77,6 +77,8 @@ export default function EmailLog() {
       const from = e.from || e.sender || 'tdevendiran123@gmail.com'
       const recipients = formatRecipients(e.to || e.recipient)
       const sentAt = e.sentAt || e.sent_at || ''
+      const status = e.status || 'Sent'
+      const errorMessage = e.error_message || e.errorMessage || null
 
       return {
         ...e,
@@ -86,12 +88,24 @@ export default function EmailLog() {
         from,
         recipients,
         sentAt,
+        status,
+        errorMessage,
       }
     })
   }, [s])
 
   const sentColumns = [
     { title: 'Sent at', dataIndex: 'sentAt', width: 170, sorter: true, render: fmtDateTime },
+    {
+      title: 'Status',
+      dataIndex: 'status',
+      width: 110,
+      render: (v, r) => {
+        if (v === 'Sent') return <Tag color="success">Sent</Tag>
+        if (v === 'Simulated') return <Tag color="blue">Simulated</Tag>
+        return <Tag color="error" title={r.errorMessage || 'Failed'}>Failed</Tag>
+      },
+    },
     {
       title: 'From',
       dataIndex: 'from',
@@ -320,6 +334,18 @@ export default function EmailLog() {
                     : [
                         ['From', <span style={{ color: '#0f766e', fontWeight: 600 }}>{open.from || 'tdevendiran123@gmail.com'} &nbsp;(ToolShoppe Industrial Supply)</span>],
                         ['Sent at', fmtDateTime(open.sentAt)],
+                        ['Status', (
+                          <span>
+                            <Tag color={open.status === 'Sent' ? 'success' : open.status === 'Simulated' ? 'blue' : 'error'}>
+                              {open.status || 'Sent'}
+                            </Tag>
+                            {open.errorMessage && (
+                              <div style={{ color: '#dc2626', fontSize: 12, marginTop: 4, fontFamily: 'monospace' }}>
+                                {open.errorMessage}
+                              </div>
+                            )}
+                          </span>
+                        )],
                         ['To', open.recipients || formatRecipients(open.to || open.recipient)],
                         ['Subject', open.subject || '—'],
                         ['Document', open.routePath ? <a className="doc-no" onClick={() => nav(open.routePath)}>{open.doc}</a> : <span>{open.doc}</span>],

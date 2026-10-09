@@ -24,3 +24,13 @@ htmlcov/
 *.log
 .DS_Store
 Thumbs.db
+
+# Environment & Secrets
+.env
+*.env
+backend/.env
+
+# Local Databases
+*.db
+*.sqlite3
+backend/toolshoppe.db

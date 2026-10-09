@@ -81,32 +81,33 @@ export default function PurchaseInvoice() {
     {
       title: 'Invoice No',
       dataIndex: 'piNo',
-      width: 116,
+      width: 108,
       sorter: true,
       render: (v, r) => <a className="doc-no" onClick={() => nav(`/purchase/invoice/${r.id}`)}>{v}</a>,
     },
     {
       title: 'Supplier',
       dataIndex: 'supplier',
+      width: 170,
+      ellipsis: true,
       sorter: true,
       render: (v, r) => (
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 550 }}>{v}</div>
+          <div style={{ fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</div>
           <div className="dim" style={{ fontSize: 11.5 }}>Their inv {r.supplierInvNo}</div>
         </div>
       ),
     },
-    { title: 'PO No', dataIndex: 'poNo', width: 106, render: (v, r) => <a className="doc-no" onClick={() => nav(`/purchase/purchase-order/${r.poId}`)}>{v}</a> },
-    { title: 'GRN No', dataIndex: 'grnNo', width: 114, render: (v, r) => <a className="doc-no" onClick={() => nav(`/purchase/grn/${r.grnId}`)}>{v}</a> },
-    { title: 'Request No', dataIndex: 'crNo', width: 122, render: (v, r) => <RefChip onClick={() => nav(`/sales/customer-request/${r.crId}`)}>{v}</RefChip> },
-    { title: 'Date', dataIndex: 'date', width: 124, sorter: true, render: fmtDate },
-    { title: 'Amount', dataIndex: 'total', width: 152, numeric: true, sorter: true, render: (v) => <Money value={v} strong /> },
-    { title: 'Due date', dataIndex: 'dueDate', width: 124, render: fmtDate },
-    { title: 'Status', dataIndex: 'status', width: 108, render: (v) => <StatusBadge status={v} /> },
+    { title: 'PO No', dataIndex: 'poNo', width: 95, render: (v, r) => <a className="doc-no" onClick={() => nav(`/purchase/purchase-order/${r.poId}`)}>{v}</a> },
+    { title: 'GRN No', dataIndex: 'grnNo', width: 95, render: (v, r) => <a className="doc-no" onClick={() => nav(`/purchase/grn/${r.grnId}`)}>{v}</a> },
+    { title: 'Request No', dataIndex: 'crNo', width: 105, render: (v, r) => <RefChip onClick={() => nav(`/sales/customer-request/${r.crId}`)}>{v}</RefChip> },
+    { title: 'Date', dataIndex: 'date', width: 115, sorter: true, render: fmtDate },
+    { title: 'Amount', dataIndex: 'total', width: 120, numeric: true, sorter: true, render: (v) => <Money value={v} strong /> },
+    { title: 'Due date', dataIndex: 'dueDate', width: 115, render: fmtDate },
+    { title: 'Status', dataIndex: 'status', width: 100, render: (v) => <StatusBadge status={v} /> },
     {
       title: 'Actions',
-      width: 78,
-      fixed: 'right',
+      width: 75,
       render: (_, r) => (
         <RowActions>
           <IconBtn icon={Eye} label="View invoice" onClick={() => nav(`/purchase/invoice/${r.id}`)} />
@@ -141,7 +142,7 @@ export default function PurchaseInvoice() {
       <DataTable
         columns={columns}
         data={rows}
-        scrollX={1500}
+        scrollX={1060}
         showRange
         searchKeys={['piNo', 'poNo', 'grnNo', 'crNo', 'supplier', 'supplierInvNo']}
         searchPlaceholder="Search invoice, PO, GRN, supplier…"

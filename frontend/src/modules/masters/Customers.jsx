@@ -18,10 +18,11 @@ export default function Customers() {
   const toast = useToast()
   const [draft, setDraft] = useState(null)
   const [view, setView] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
 
-  const save = () => {
+  const save = async () => {
     if (!draft.name.trim()) return toast.warning('Please enter the customer name.')
     const phoneDigits = (draft.phone || '').replace(/\D/g, '')
     if (!phoneDigits) return toast.warning('Please enter the 10-digit mobile number.')
@@ -31,10 +32,31 @@ export default function Customers() {
       (c) => c.name && c.name.trim().toLowerCase() === draft.name.trim().toLowerCase() && String(c.id) !== String(draft.id)
     )
     if (isDup) return toast.warning(`A customer named "${draft.name.trim()}" already exists.`)
+    const isDupEmail = (state.customers || []).some(
+      (c) => c.email && c.email.trim().toLowerCase() === draft.email.trim().toLowerCase() && String(c.id) !== String(draft.id)
+    )
+    if (isDupEmail) return toast.warning(`A customer with email "${draft.email.trim()}" already exists.`)
+
     const updatedDraft = { ...draft, phone: phoneDigits }
-    dispatch({ type: 'MASTER_SAVE', collection: 'customers', codeType: 'CUS', record: updatedDraft })
-    toast.success(draft.id ? 'Customer updated successfully.' : 'Customer created successfully.')
-    setDraft(null)
+    setSubmitting(true)
+    try {
+      await dispatch({
+        type: 'MASTER_SAVE',
+        collection: 'customers',
+        codeType: 'CUS',
+        record: updatedDraft,
+        throwOnError: true,
+      })
+      toast.success(draft.id ? 'Customer updated successfully.' : 'Customer created successfully.')
+      setDraft(null)
+    } catch (err) {
+      if (!draft.id) {
+        dispatch({ type: 'MASTER_DELETE', collection: 'customers', id: updatedDraft.name })
+      }
+      toast.error(err?.message || 'Failed to save customer. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const toggle = (r) =>
@@ -151,8 +173,9 @@ export default function Customers() {
         open={!!draft}
         title={draft?.id ? `Edit customer ${draft.code}` : 'New customer'}
         subtitle="Fields marked with an asterisk are required."
-        onCancel={() => setDraft(null)}
+        onCancel={() => !submitting && setDraft(null)}
         onOk={save}
+        confirmLoading={submitting}
         okText={draft?.id ? 'Save changes' : 'Create customer'}
         width={860}
       >

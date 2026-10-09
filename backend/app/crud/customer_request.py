@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from app.models.customer_request import CustomerRequest, CustomerRequestItem
@@ -80,7 +80,14 @@ def get_customer_requests(
     status: Optional[str] = None,
 ) -> Tuple[List[CustomerRequest], int]:
     """Retrieve Customer Requests with optional search, status filtering, and pagination."""
-    query = db.query(CustomerRequest).join(Customer)
+    query = (
+        db.query(CustomerRequest)
+        .join(Customer)
+        .options(
+            joinedload(CustomerRequest.customer),
+            joinedload(CustomerRequest.items).joinedload(CustomerRequestItem.item),
+        )
+    )
 
     if status and status.lower() != "all":
         query = query.filter(CustomerRequest.status.ilike(status.strip()))

@@ -22,7 +22,20 @@ def generate_inward_code(db: Session) -> str:
 
 
 def format_inward_out(inward: Inward) -> InwardOut:
-    """Convert Inward ORM model to schema."""
+    """Convert Inward ORM model to schema with full PO, supplier, date, and accepted/rejected breakdown."""
+    grn = inward.grn
+    cr = inward.customer_request
+    sup = grn.supplier if grn else None
+    po = grn.purchase_order if grn else None
+
+    # Map GRN line items to get received_qty and rejected_qty for each item
+    grn_item_map = {}
+    total_rejected = Decimal("0.00")
+    if grn and grn.items:
+        for gi in grn.items:
+            grn_item_map[gi.item_id] = gi
+            total_rejected += (gi.rejected_qty or Decimal("0.00"))
+
     lines_out = []
     total_qty = Decimal("0.00")
     total_value = Decimal("0.00")
@@ -31,6 +44,7 @@ def format_inward_out(inward: Inward) -> InwardOut:
         line_total = line.accepted_qty * line.rate
         total_qty += line.accepted_qty
         total_value += line_total
+        gi = grn_item_map.get(line.item_id)
         lines_out.append(
             InwardItemOut(
                 id=line.id,
@@ -38,28 +52,32 @@ def format_inward_out(inward: Inward) -> InwardOut:
                 item_id=line.item_id,
                 item_name=line.item.name if line.item else None,
                 item_code=line.item.item_code if line.item else None,
+                received_qty=gi.received_qty if gi else line.accepted_qty,
                 accepted_qty=line.accepted_qty,
+                rejected_qty=gi.rejected_qty if gi else Decimal("0.00"),
                 rate=line.rate,
                 line_total=line_total,
             )
         )
-
-    grn = inward.grn
-    cr = inward.customer_request
-    sup = grn.supplier if grn else None
 
     return InwardOut(
         id=inward.id,
         inward_no=inward.inward_no,
         grn_id=inward.grn_id,
         grn_no=grn.grn_no if grn else None,
+        po_id=grn.purchase_order_id if grn else None,
+        po_no=po.po_no if po else None,
+        supplier_id=grn.supplier_id if grn else None,
+        supplier_name=sup.name if sup else None,
         customer_request_id=inward.customer_request_id,
         customer_request_no=cr.request_no if cr else None,
-        supplier_name=sup.name if sup else None,
+        received_date=str(grn.received_date) if (grn and grn.received_date) else None,
         status=inward.status,
         added_at=inward.added_at,
         created_at=inward.created_at,
         total_qty=total_qty,
+        total_accepted_qty=total_qty,
+        total_rejected_qty=total_rejected,
         total_value=total_value,
         items=lines_out,
     )

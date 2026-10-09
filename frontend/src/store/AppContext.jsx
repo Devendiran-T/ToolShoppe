@@ -104,9 +104,12 @@ export function AppProvider({ children }) {
     async (action) => {
       dispatchLocal(action)
       try {
-        await syncActionToBackend(action, stateRef.current)
+        return await syncActionToBackend(action, stateRef.current)
       } catch (err) {
         console.warn('Action sync notice:', err)
+        if (action?.throwOnError) {
+          throw err
+        }
       }
     },
     []

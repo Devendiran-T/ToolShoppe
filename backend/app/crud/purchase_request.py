@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import or_
 
 from app.models.purchase_request import PurchaseRequest, RFQSupplier
@@ -51,12 +51,32 @@ def format_pr_out(pr: PurchaseRequest) -> PurchaseRequestOut:
 
 def get_purchase_request_by_id(db: Session, pr_id: int) -> Optional[PurchaseRequest]:
     """Retrieve Purchase Request by ID."""
-    return db.query(PurchaseRequest).filter(PurchaseRequest.id == pr_id).first()
+    return (
+        db.query(PurchaseRequest)
+        .options(
+            joinedload(PurchaseRequest.customer_request).joinedload(CustomerRequest.customer),
+            joinedload(PurchaseRequest.customer_request).selectinload(CustomerRequest.items).joinedload(CustomerRequestItem.item),
+            selectinload(PurchaseRequest.rfq_suppliers),
+            selectinload(PurchaseRequest.vendor_quotations),
+        )
+        .filter(PurchaseRequest.id == pr_id)
+        .first()
+    )
 
 
 def get_purchase_request_by_cr_id(db: Session, cr_id: int) -> Optional[PurchaseRequest]:
     """Retrieve Purchase Request by Customer Request ID."""
-    return db.query(PurchaseRequest).filter(PurchaseRequest.customer_request_id == cr_id).first()
+    return (
+        db.query(PurchaseRequest)
+        .options(
+            joinedload(PurchaseRequest.customer_request).joinedload(CustomerRequest.customer),
+            joinedload(PurchaseRequest.customer_request).selectinload(CustomerRequest.items).joinedload(CustomerRequestItem.item),
+            selectinload(PurchaseRequest.rfq_suppliers),
+            selectinload(PurchaseRequest.vendor_quotations),
+        )
+        .filter(PurchaseRequest.customer_request_id == cr_id)
+        .first()
+    )
 
 
 def get_purchase_requests(
@@ -65,11 +85,23 @@ def get_purchase_requests(
     limit: int = 100,
     search: Optional[str] = None,
     status: Optional[str] = None,
+    eligible_for_quote: Optional[bool] = None,
 ) -> Tuple[List[PurchaseRequest], int]:
-    """Retrieve Purchase Requests with optional search, status filtering, and pagination."""
-    query = db.query(PurchaseRequest).join(CustomerRequest)
+    """Retrieve Purchase Requests with optional search, status filtering, eligibility filtering, and pagination."""
+    query = (
+        db.query(PurchaseRequest)
+        .join(CustomerRequest)
+        .options(
+            joinedload(PurchaseRequest.customer_request).joinedload(CustomerRequest.customer),
+            joinedload(PurchaseRequest.customer_request).selectinload(CustomerRequest.items).joinedload(CustomerRequestItem.item),
+            selectinload(PurchaseRequest.rfq_suppliers),
+            selectinload(PurchaseRequest.vendor_quotations),
+        )
+    )
 
-    if status and status.lower() != "all":
+    if eligible_for_quote:
+        query = query.filter(PurchaseRequest.status.in_(["RFQ Sent", "Quoted"])).filter(PurchaseRequest.rfq_suppliers.any())
+    elif status and status.lower() != "all":
         query = query.filter(PurchaseRequest.status.ilike(status.strip()))
 
     if search:
@@ -94,8 +126,9 @@ def send_rfq(
     """
     Dispatch RFQ to selected suppliers:
     1. Associates suppliers with the PR.
-    2. Logs an email entry for every supplier recipient.
-    3. Updates PR status to 'RFQ Sent' and CR status to 'RFQ Sent'.
+    2. Dispatches real email via SMTP and records delivery status & sanitized errors.
+    3. Logs an email entry for every supplier recipient.
+    4. Updates PR status to 'RFQ Sent' and CR status to 'RFQ Sent'.
     """
     pr = get_purchase_request_by_id(db, rfq_data.pr_id)
     if not pr:
@@ -114,6 +147,8 @@ def send_rfq(
         raise ValueError("At least one supplier (by ID or name) must be specified.")
 
     created_logs = []
+    any_dispatched = False
+
     for sup_id in resolved_sup_ids:
         supplier = db.query(Supplier).filter(Supplier.id == sup_id).first()
         if not supplier:
@@ -129,24 +164,29 @@ def send_rfq(
             new_rfq = RFQSupplier(purchase_request_id=pr.id, supplier_id=sup_id)
             db.add(new_rfq)
 
-        # Log email
-        log = EmailLog(
-            document_type="RFQ",
-            document_id=pr.id,
-            recipient=supplier.email,
-            subject=rfq_data.subject,
-            body=rfq_data.body,
-        )
-        db.add(log)
-        created_logs.append(log)
-
-        # Dispatch real email via Gmail SMTP
+        # Dispatch real email via SMTP
+        delivery_res = None
         if supplier.email:
-            send_live_email(
+            delivery_res = send_live_email(
                 recipients=supplier.email,
                 subject=rfq_data.subject,
                 body=rfq_data.body,
             )
+            if delivery_res.success:
+                any_dispatched = True
+
+        # Log email with exact status and error details
+        log = EmailLog(
+            document_type="RFQ",
+            document_id=pr.id,
+            recipient=supplier.email or "No Email Configured",
+            subject=rfq_data.subject,
+            body=rfq_data.body,
+            status=delivery_res.status if delivery_res else "Failed",
+            error_message=delivery_res.error_message if delivery_res else "Supplier does not have an email address configured",
+        )
+        db.add(log)
+        created_logs.append(log)
 
     # Update PR status
     if pr.status == "Open":

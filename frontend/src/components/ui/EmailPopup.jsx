@@ -41,7 +41,7 @@ export default function EmailPopup({
       okText={okText}
       okDisabled={disabled}
       width={width}
-      footerNote="Simulated send — recorded in the Email Log."
+      footerNote="Dispatched via SMTP to recipients and recorded in the Email Communication Log."
     >
       {children}
 
@@ -123,7 +123,7 @@ export default function EmailPopup({
           type="info"
           showIcon
           icon={<Send size={15} strokeWidth={2} />}
-          message="No mail leaves the browser — the message is written to the Email Log instead."
+          message="Emails are dispatched to recipient addresses and tracked with delivery status in the Email Log."
         />
       </div>
     </FormModal>

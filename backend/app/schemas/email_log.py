@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -10,6 +11,7 @@ class EmailLogOut(BaseModel):
     subject: str
     body: str
     status: str = "Sent"
+    error_message: Optional[str] = None
     sent_at: datetime
 
     class Config:

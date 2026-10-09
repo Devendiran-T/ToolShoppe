@@ -26,12 +26,15 @@ router = APIRouter(prefix="/purchase", tags=["3. Purchase - Request (PR & RFQ)"]
 def list_prs(
     search: Optional[str] = Query(None, description="Search by PR number, CR number, or reference"),
     status: Optional[str] = Query("all", description="Filter by status ('Open', 'RFQ Sent', 'Quoted', 'Ordered', or 'all')"),
+    eligible_for_quote: Optional[bool] = Query(None, description="Filter only PRs with sent RFQs ready for Vendor Quotations"),
     skip: int = Query(0, ge=0, description="Records to skip"),
     limit: int = Query(50, ge=1, le=500, description="Max records to return"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    items, total = get_purchase_requests(db, skip=skip, limit=limit, search=search, status=status)
+    items, total = get_purchase_requests(
+        db, skip=skip, limit=limit, search=search, status=status, eligible_for_quote=eligible_for_quote
+    )
     return SuccessResponse(
         success=True,
         message="Purchase requests retrieved successfully",

@@ -42,6 +42,8 @@ def init_db(db: Session) -> None:
             with engine.begin() as conn:
                 if "status" not in email_cols:
                     conn.execute(text("ALTER TABLE email_logs ADD COLUMN status VARCHAR(50) DEFAULT 'Sent'"))
+                if "error_message" not in email_cols:
+                    conn.execute(text("ALTER TABLE email_logs ADD COLUMN error_message VARCHAR(500) NULL"))
     except Exception as exc:
         logger.warning(f"Column migration warning (safe to ignore): {exc}")
 

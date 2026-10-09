@@ -165,52 +165,9 @@ def create_outward(db: Session, obj_in: OutwardCreate, user_id: Optional[int] = 
     )
     stock_map = {s.item_id: s.on_hand for s in summaries}
 
-    # Auto-inward missing stock if needed so dispatch always succeeds in operations
-    if not is_draft:
-        for line in obj_in.items:
-            qty = line.dispatched_qty
-            avail = stock_map.get(line.item_id, Decimal("0.00"))
-            if qty > avail:
-                needed = qty - avail
-                so_line = so_items_map.get(line.item_id)
-                rate = Decimal(str(round(float(so_line.selling_price * Decimal("0.85")), 2))) if so_line else Decimal("500.00")
-                auto_in = StockLedger(
-                    customer_request_id=cr_id,
-                    customer_order_id=so.id,
-                    item_id=line.item_id,
-                    direction="IN",
-                    quantity=needed,
-                    unit_cost=rate,
-                    total_value=needed * rate,
-                    reference_type="INW",
-                    reference_id=so.id,
-                    created_by=user_id,
-                )
-                db.add(auto_in)
-                summary = db.query(StockSummary).filter(
-                    StockSummary.customer_request_id == cr_id,
-                    StockSummary.item_id == line.item_id,
-                ).first()
-                if summary:
-                    summary.total_in_qty += needed
-                    summary.on_hand += needed
-                    summary.total_in_value += needed * rate
-                    summary.updated_at = datetime.utcnow()
-                else:
-                    summary = StockSummary(
-                        customer_request_id=cr_id,
-                        item_id=line.item_id,
-                        total_in_qty=needed,
-                        total_out_qty=Decimal("0.00"),
-                        on_hand=needed,
-                        total_in_value=needed * rate,
-                        total_out_value=Decimal("0.00"),
-                        average_cost=rate,
-                        stock_value=needed * rate,
-                    )
-                    db.add(summary)
-                db.flush()
-                stock_map[line.item_id] = stock_map.get(line.item_id, Decimal("0.00")) + needed
+    # Check Rule 7: Has inventory been posted for this customer request?
+    if not is_draft and not summaries:
+        raise ValueError("Cannot dispatch this order. Inventory has not been posted for this customer request.")
 
     # Validate each input line item
     for line in obj_in.items:
@@ -226,8 +183,24 @@ def create_outward(db: Session, obj_in: OutwardCreate, user_id: Optional[int] = 
         prev_dispatched = already_dispatched_map.get(line.item_id, Decimal("0.00"))
         pending_so_qty = so_line.quantity - prev_dispatched
         if qty > pending_so_qty:
-            # Adjust pending so qty if needed for demo test
-            pending_so_qty = qty
+            raise ValueError(
+                f"Dispatched quantity ({qty}) exceeds pending customer order quantity "
+                f"({pending_so_qty}) for item ID {line.item_id}."
+            )
+
+        # Guard 2: Cannot exceed on-hand stock in StockSummary (Rule 2 & 5)
+        available_on_hand = stock_map.get(line.item_id, Decimal("0.00"))
+        if not is_draft:
+            if available_on_hand <= 0:
+                raise ValueError(
+                    f"Cannot dispatch this order. Inventory has not been posted for item ID {line.item_id}."
+                )
+            if qty > available_on_hand:
+                cr_no = so.customer_request.request_no if so.customer_request else str(cr_id)
+                raise ValueError(
+                    f"Dispatched quantity ({qty}) exceeds available on-hand stock "
+                    f"({available_on_hand}) for item ID {line.item_id} on Customer Request {cr_no}."
+                )
 
     # Create Outward header
     outward_no = generate_outward_code(db)

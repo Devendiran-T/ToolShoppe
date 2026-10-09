@@ -116,13 +116,21 @@ export default function DataTable({
           return String(x ?? '').localeCompare(String(y ?? ''))
         }
       }
-      if (out.title === 'Actions') {
-        delete out.width
-        out.align = 'right'
+      const isAction =
+        out.title === 'Actions' ||
+        out.title === 'Available Actions' ||
+        out.key === 'actions' ||
+        out.dataIndex === 'actions'
+
+      if (isAction) {
+        out.align = out.align || 'left'
         out.className = out.className ? out.className + ' col-actions' : 'col-actions'
+        if (c.width) out.width = c.width
+        if (c.fixed) out.fixed = c.fixed
+      } else if (c.fixed) {
+        out.fixed = c.fixed
       }
       delete out.numeric
-      delete out.fixed
       return out
     })
     if (!serial) return built
@@ -186,6 +194,7 @@ export default function DataTable({
         dataSource={rows}
         rowKey={rowKey}
         summary={summary}
+        scroll={scrollX ? { x: scrollX } : { x: 'max-content' }}
         pagination={
           rows.length > pageSize
             ? { pageSize, showSizeChanger: false, size: 'small', showTotal: (t, r) => `${r[0]}–${r[1]} of ${t}` }

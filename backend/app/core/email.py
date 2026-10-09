@@ -1,12 +1,39 @@
 import logging
+import re
 import smtplib
+import ssl
+from dataclasses import dataclass
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import List, Union
+from typing import List, Optional, Union
 
 from app.core.config import settings
 
 logger = logging.getLogger("app.email")
+
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$")
+
+
+def is_valid_email(email_str: str) -> bool:
+    """Validate that the string is a well-formed email address."""
+    if not email_str or not isinstance(email_str, str):
+        return False
+    return bool(EMAIL_REGEX.match(email_str.strip()))
+
+
+@dataclass
+class EmailDeliveryResult:
+    """
+    Structured outcome of an email transmission attempt.
+    Implements __bool__ to maintain backward-compatibility with boolean checks.
+    """
+    success: bool
+    status: str  # 'Sent', 'Simulated', 'Failed'
+    error_message: Optional[str] = None
+    detail: Optional[str] = None
+
+    def __bool__(self) -> bool:
+        return self.success
 
 
 def send_live_email(
@@ -14,55 +41,128 @@ def send_live_email(
     subject: str,
     body: str,
     html_body: str = None,
-) -> bool:
+) -> EmailDeliveryResult:
     """
-    Sends a live email via SMTP using configured Gmail/SMTP credentials.
-    Returns True if successfully sent, False otherwise.
+    Sends an email via SMTP (supporting both Port 465 SSL and Port 587 STARTTLS).
+    If simulation mode is active or credentials are intentionally unconfigured,
+    records the dispatch as 'Simulated'.
+    Returns an EmailDeliveryResult instance with delivery status and sanitized errors.
     """
-    if not getattr(settings, "SMTP_ENABLED", False):
-        logger.info(f"[Email Sim] SMTP not enabled. Email to {recipients} logged only.")
-        return True
-
+    # 1. Parse and validate recipients
     if isinstance(recipients, str):
-        recipients = [r.strip() for r in recipients.split(",") if r.strip()]
+        recipient_list = [r.strip() for r in recipients.split(",") if r.strip()]
+    elif isinstance(recipients, list):
+        recipient_list = [r.strip() for r in recipients if isinstance(r, str) and r.strip()]
+    else:
+        recipient_list = []
 
-    if not recipients:
-        return False
+    if not recipient_list:
+        return EmailDeliveryResult(
+            success=False,
+            status="Failed",
+            error_message="No recipient email address provided.",
+        )
+
+    invalid_recipients = [r for r in recipient_list if not is_valid_email(r)]
+    if invalid_recipients:
+        return EmailDeliveryResult(
+            success=False,
+            status="Failed",
+            error_message=f"Invalid email recipient format: {', '.join(invalid_recipients)}",
+        )
+
+    # 2. Check Simulation mode
+    if not getattr(settings, "SMTP_ENABLED", True):
+        logger.info(f"[Email Sim] SMTP sending is disabled in settings. Email to {recipient_list} recorded in simulation mode.")
+        return EmailDeliveryResult(
+            success=True,
+            status="Simulated",
+            detail="Simulation mode active (SMTP_ENABLED=False).",
+        )
 
     sender_email = getattr(settings, "SMTP_FROM_EMAIL", "tdevendiran123@gmail.com")
     sender_name = getattr(settings, "SMTP_FROM_NAME", "ToolShoppe Industrial Supply")
     smtp_host = getattr(settings, "SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(getattr(settings, "SMTP_PORT", 587))
+    smtp_port = int(getattr(settings, "SMTP_PORT", 465))
     smtp_user = getattr(settings, "SMTP_USER", sender_email)
     smtp_pass = getattr(settings, "SMTP_PASSWORD", "")
 
-    if not smtp_pass:
-        logger.warning("[Email] SMTP password not set. Skipping live delivery.")
-        return False
+    # 3. Missing Credentials check
+    if not smtp_pass or not smtp_user:
+        logger.warning("[Email Sim] SMTP credentials not fully configured. Email logged as simulated.")
+        return EmailDeliveryResult(
+            success=True,
+            status="Simulated",
+            error_message="SMTP credentials not configured. Recorded as simulated send.",
+            detail="Missing SMTP_PASSWORD or SMTP_USER in environment variables.",
+        )
 
+    # 4. Construct message
     try:
         msg = MIMEMultipart("alternative")
         msg["From"] = f"{sender_name} <{sender_email}>"
-        msg["To"] = ", ".join(recipients)
+        msg["To"] = ", ".join(recipient_list)
         msg["Subject"] = subject
 
-        # Plain text version
         msg.attach(MIMEText(body, "plain", "utf-8"))
-
-        # HTML version if provided
         if html_body:
             msg.attach(MIMEText(html_body, "html", "utf-8"))
 
-        server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(sender_email, recipients, msg.as_string())
-        server.quit()
-        logger.info(f"[Email Success] Sent live email to {recipients}: '{subject}'")
-        return True
+        raw_message = msg.as_string()
     except Exception as exc:
-        logger.error(f"[Email Error] Failed to send email to {recipients}: {exc}")
-        return False
+        return EmailDeliveryResult(
+            success=False,
+            status="Failed",
+            error_message=f"Failed to compose email message: {str(exc)}",
+        )
+
+    # 5. Connect and send via SSL (465) or STARTTLS (587), with auto-fallback
+    def _send_ssl():
+        ssl_ctx = ssl.create_default_context()
+        with smtplib.SMTP_SSL(smtp_host, 465, context=ssl_ctx, timeout=6) as server:
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(sender_email, recipient_list, raw_message)
+
+    def _send_starttls():
+        with smtplib.SMTP(smtp_host, 587, timeout=4) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(sender_email, recipient_list, raw_message)
+
+    try:
+        if smtp_port == 465:
+            _send_ssl()
+        elif smtp_port == 587:
+            try:
+                _send_starttls()
+            except Exception as starttls_err:
+                logger.info(f"STARTTLS on 587 failed ({starttls_err}), attempting fallback to SSL on 465...")
+                _send_ssl()
+        else:
+            # General port connection
+            try:
+                _send_ssl()
+            except Exception:
+                _send_starttls()
+
+        logger.info(f"[Email Success] Dispatched email to {recipient_list}: '{subject}'")
+        return EmailDeliveryResult(
+            success=True,
+            status="Sent",
+            detail="Server accepted email for delivery.",
+        )
+    except Exception as exc:
+        # Sanitize exception message to prevent credential leakage
+        raw_err = str(exc)
+        if smtp_pass:
+            raw_err = raw_err.replace(smtp_pass, "******")
+        logger.error(f"[Email Error] Failed sending email to {recipient_list}: {raw_err}")
+        return EmailDeliveryResult(
+            success=False,
+            status="Failed",
+            error_message=f"SMTP transmission failed: {raw_err}",
+        )
+
 
 
 def fetch_inbox_messages(limit: int = 15) -> List[dict]:
@@ -81,7 +181,7 @@ def fetch_inbox_messages(limit: int = 15) -> List[dict]:
     results = []
     mail = None
     try:
-        mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, timeout=8)
+        mail = imaplib.IMAP4_SSL("imap.gmail.com", 993, timeout=3)
         mail.login(smtp_user, smtp_pass)
         status, count_data = mail.select("inbox")
         total = int(count_data[0]) if count_data and count_data[0] else 0

@@ -19,10 +19,11 @@ export default function Suppliers() {
   const toast = useToast()
   const [draft, setDraft] = useState(null)
   const [view, setView] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
 
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
 
-  const save = () => {
+  const save = async () => {
     if (!draft.name.trim()) return toast.warning('Please enter the supplier name.')
     const phoneDigits = (draft.phone || '').replace(/\D/g, '')
     if (!phoneDigits) return toast.warning('Please enter the 10-digit mobile number.')
@@ -32,10 +33,31 @@ export default function Suppliers() {
       (s) => s.name && s.name.trim().toLowerCase() === draft.name.trim().toLowerCase() && String(s.id) !== String(draft.id)
     )
     if (isDup) return toast.warning(`A supplier named "${draft.name.trim()}" already exists.`)
+    const isDupEmail = (state.suppliers || []).some(
+      (s) => s.email && s.email.trim().toLowerCase() === draft.email.trim().toLowerCase() && String(s.id) !== String(draft.id)
+    )
+    if (isDupEmail) return toast.warning(`A supplier with email "${draft.email.trim()}" already exists.`)
+
     const updatedDraft = { ...draft, phone: phoneDigits }
-    dispatch({ type: 'MASTER_SAVE', collection: 'suppliers', codeType: 'SUP', record: updatedDraft })
-    toast.success(draft.id ? 'Supplier updated successfully.' : 'Supplier created successfully.')
-    setDraft(null)
+    setSubmitting(true)
+    try {
+      await dispatch({
+        type: 'MASTER_SAVE',
+        collection: 'suppliers',
+        codeType: 'SUP',
+        record: updatedDraft,
+        throwOnError: true,
+      })
+      toast.success(draft.id ? 'Supplier updated successfully.' : 'Supplier created successfully.')
+      setDraft(null)
+    } catch (err) {
+      if (!draft.id) {
+        dispatch({ type: 'MASTER_DELETE', collection: 'suppliers', id: updatedDraft.name })
+      }
+      toast.error(err?.message || 'Failed to save supplier. Please try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const toggle = (r) =>
@@ -136,8 +158,9 @@ export default function Suppliers() {
         open={!!draft}
         title={draft?.id ? `Edit supplier ${draft.code}` : 'New supplier'}
         subtitle="Fields marked with an asterisk are required."
-        onCancel={() => setDraft(null)}
+        onCancel={() => !submitting && setDraft(null)}
         onOk={save}
+        confirmLoading={submitting}
         okText={draft?.id ? 'Save changes' : 'Create supplier'}
         width={860}
       >

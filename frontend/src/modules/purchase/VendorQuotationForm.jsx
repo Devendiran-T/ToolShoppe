@@ -42,14 +42,24 @@ export default function VendorQuotationForm() {
   const pr = state.purchaseRequests.find((p) => p.id === draft.prId)
   const cr = pr ? getCR(state, pr.crId) : null
 
-  const prOptions = state.purchaseRequests
-    .filter((p) => p.status !== 'Ordered')
-    .map((p) => {
-      const c = getCR(state, p.crId)
-      return { value: p.id, label: `${p.prNo} — ${c ? c.crNo : ''} — ${c ? customerName(state, c.customerId) : ''}` }
+  // Only Purchase Requests with an RFQ successfully sent to at least one supplier appear in New Vendor Quotation
+  const eligiblePrs = useMemo(() => {
+    return (state.purchaseRequests || []).filter((p) => {
+      const hasSentRfq = (p.status === 'RFQ Sent' || p.status === 'Quoted') && (p.rfqSupplierIds || []).length > 0
+      return hasSentRfq && p.status !== 'Ordered'
     })
+  }, [state.purchaseRequests])
 
-  // Suppliers are limited to the ones the RFQ was actually sent to.
+  const prOptions = eligiblePrs.map((p) => {
+    const c = getCR(state, p.crId)
+    const cust = c ? customerName(state, c.customerId) : ''
+    return {
+      value: p.id,
+      label: `${p.prNo} — ${c ? c.crNo : 'No CR'} — RFQ: ${p.status}${cust ? ` (${cust})` : ''}`,
+    }
+  })
+
+  // Suppliers are strictly limited to the ones the RFQ was actually sent to.
   const supplierOptions = useMemo(() => {
     if (!pr) return []
     const already = state.vendorQuotations.filter((v) => v.prId === pr.id && v.id !== draft.id).map((v) => v.supplierId)
@@ -83,6 +93,10 @@ export default function VendorQuotationForm() {
   const save = () => {
     if (!draft.prId) return toast.warning('Please select the purchase request.')
     if (!draft.supplierId) return toast.warning('Please select the supplier.')
+    // Validate supplier was invited to quote for this PR
+    if (pr && !(pr.rfqSupplierIds || []).includes(draft.supplierId)) {
+      return toast.warning('The selected supplier was not invited to quote for this Purchase Request.')
+    }
     if (!draft.lines.some((l) => !l.notQuoted && Number(l.rate) > 0)) return toast.warning('Enter a rate for at least one item.')
     dispatch({ type: 'VQ_SAVE', payload: draft })
     toast.success(existing ? 'Quotation updated successfully.' : 'Vendor quotation saved.')
@@ -161,6 +175,16 @@ export default function VendorQuotationForm() {
         />
       )}
 
+      {!existing && eligiblePrs.length === 0 && (
+        <Alert
+          style={{ marginBottom: 16 }}
+          type="info"
+          showIcon
+          message="No Purchase Requests with sent RFQs are available for Vendor Quotation."
+          description="To record a Vendor Quotation, an RFQ must first be dispatched to at least one supplier on a Purchase Request."
+        />
+      )}
+
       <Card title="Quotation information" icon={FileText}>
         <FormSection>
           <Row gutter={16}>
@@ -173,7 +197,12 @@ export default function VendorQuotationForm() {
                   value={draft.prId || undefined}
                   options={prOptions}
                   onChange={pickPr}
-                  placeholder="Select PR"
+                  placeholder={
+                    eligiblePrs.length === 0
+                      ? "No Purchase Requests with sent RFQs are available for Vendor Quotation."
+                      : "Select PR with sent RFQ"
+                  }
+                  notFoundContent="No Purchase Requests with sent RFQs are available for Vendor Quotation."
                   style={{ width: '100%' }}
                 />
               </Field>

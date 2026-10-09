@@ -89,35 +89,43 @@ def send_purchase_order(
 ) -> PurchaseOrder:
     """
     Send Purchase Order to Supplier:
-    - Sets status = 'Sent'.
-    - Records sent_at.
-    - Saves entry in EmailLog (document_type = 'Purchase Order').
+    - Validates supplier email.
+    - Dispatches email via SMTP.
+    - Saves entry in EmailLog with status & error details.
+    - Sets status = 'Sent' upon success.
     """
     po = get_purchase_order_by_id(db, po_id)
     if not po:
         raise ValueError(f"Purchase Order with ID {po_id} not found.")
 
-    recipient = obj_in.recipient or (po.supplier.email if po.supplier else "supplier@example.com")
+    recipient = (obj_in.recipient or (po.supplier.email if po.supplier else "")).strip()
+    if not recipient:
+        raise ValueError("Supplier recipient email address is required.")
+
     subject = obj_in.subject or f"Purchase Order {po.po_no} - ToolShoppe ERP"
     body = obj_in.body or f"Dear Supplier, Please find attached our Purchase Order {po.po_no}."
 
-    po.status = "Sent"
-    po.sent_at = datetime.utcnow()
+    delivery_res = send_live_email(recipients=recipient, subject=subject, body=body)
 
-    delivered = False
-    if recipient:
-        delivered = send_live_email(recipients=recipient, subject=subject, body=body)
-
+    now = datetime.utcnow()
     email_log = EmailLog(
         document_type="Purchase Order",
         document_id=po.id,
         recipient=recipient,
         subject=subject,
         body=body,
-        status="Sent" if delivered else "Failed",
-        sent_at=po.sent_at,
+        status=delivery_res.status,
+        error_message=delivery_res.error_message,
+        sent_at=now,
     )
     db.add(email_log)
+
+    if delivery_res.status == "Failed":
+        db.commit()
+        raise ValueError(f"Failed to dispatch purchase order email to supplier: {delivery_res.error_message}")
+
+    po.status = "Sent"
+    po.sent_at = now
 
     db.commit()
     db.refresh(po)

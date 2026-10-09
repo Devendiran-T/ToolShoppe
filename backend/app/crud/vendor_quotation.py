@@ -1,11 +1,11 @@
 from decimal import Decimal
 from typing import List, Optional, Tuple
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from app.models.vendor_quotation import VendorQuotation, QuotationItem
 from app.models.purchase_request import PurchaseRequest
-from app.models.customer_request import CustomerRequestItem
+from app.models.customer_request import CustomerRequest, CustomerRequestItem
 from app.models.supplier import Supplier
 from app.models.item import Item
 from app.crud.supplier import get_supplier_by_name
@@ -77,8 +77,17 @@ def format_vq_out(vq: VendorQuotation, db: Session) -> VendorQuotationOut:
 
 
 def get_vendor_quotation_by_id(db: Session, vq_id: int) -> Optional[VendorQuotation]:
-    """Retrieve Vendor Quotation by ID."""
-    return db.query(VendorQuotation).filter(VendorQuotation.id == vq_id).first()
+    """Retrieve Vendor Quotation by ID with eager loading."""
+    return (
+        db.query(VendorQuotation)
+        .options(
+            joinedload(VendorQuotation.supplier),
+            joinedload(VendorQuotation.purchase_request).joinedload(PurchaseRequest.customer_request).joinedload(CustomerRequest.items),
+            joinedload(VendorQuotation.items).joinedload(QuotationItem.item),
+        )
+        .filter(VendorQuotation.id == vq_id)
+        .first()
+    )
 
 
 def get_vendor_quotations(
@@ -90,7 +99,15 @@ def get_vendor_quotations(
     status: Optional[str] = None,
 ) -> Tuple[List[VendorQuotation], int]:
     """Retrieve Vendor Quotations with optional filters and pagination."""
-    query = db.query(VendorQuotation).join(Supplier)
+    query = (
+        db.query(VendorQuotation)
+        .join(Supplier)
+        .options(
+            joinedload(VendorQuotation.supplier),
+            joinedload(VendorQuotation.purchase_request),
+            joinedload(VendorQuotation.items).joinedload(QuotationItem.item),
+        )
+    )
 
     if pr_id:
         query = query.filter(VendorQuotation.purchase_request_id == pr_id)
@@ -118,6 +135,10 @@ def create_vendor_quotation(
     if not pr:
         raise ValueError(f"Purchase Request with ID {obj_in.purchase_request_id} does not exist.")
 
+    # 1. PR Eligibility check: Must have sent RFQs
+    if pr.status not in ["RFQ Sent", "Quoted"] or not pr.rfq_suppliers:
+        raise ValueError(f"Purchase Request {pr.pr_no} has no sent RFQs and is not eligible to receive Vendor Quotations.")
+
     if obj_in.supplier_id is None and obj_in.supplier_name:
         sup = get_supplier_by_name(db, obj_in.supplier_name)
         if not sup:
@@ -126,6 +147,16 @@ def create_vendor_quotation(
 
     if obj_in.supplier_id is None:
         raise ValueError("Either supplier_id or supplier_name must be provided.")
+
+    # 2. Supplier invitation check: Supplier must be among the RFQ recipients for this PR
+    invited_supplier_ids = {rfq.supplier_id for rfq in pr.rfq_suppliers}
+    if obj_in.supplier_id not in invited_supplier_ids:
+        sup_obj = db.query(Supplier).filter(Supplier.id == obj_in.supplier_id).first()
+        sup_display = sup_obj.name if sup_obj else f"ID {obj_in.supplier_id}"
+        raise ValueError(
+            f"Supplier '{sup_display}' was not invited to quote for Purchase Request {pr.pr_no}. "
+            f"Only suppliers with a recorded RFQ can submit quotations."
+        )
 
     # Validation: Same supplier cannot quote twice for the same PR
     existing = db.query(VendorQuotation).filter(

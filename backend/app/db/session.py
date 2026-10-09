@@ -14,8 +14,15 @@ logger = logging.getLogger("app.db")
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 
 
-def is_mysql_reachable(url_str: str, timeout: float = 5.0) -> bool:
+_MYSQL_CHECK_CACHE = None
+
+
+def is_mysql_reachable(url_str: str, timeout: float = 0.8) -> bool:
     """Fast socket test to check if remote MySQL host and port are responding."""
+    global _MYSQL_CHECK_CACHE
+    if _MYSQL_CHECK_CACHE is not None:
+        return _MYSQL_CHECK_CACHE
+
     try:
         clean = url_str.replace("mysql+pymysql://", "http://").replace("mysql://", "http://")
         parsed = urlparse(clean)
@@ -24,8 +31,10 @@ def is_mysql_reachable(url_str: str, timeout: float = 5.0) -> bool:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(timeout)
             s.connect((host, port))
+            _MYSQL_CHECK_CACHE = True
             return True
     except Exception:
+        _MYSQL_CHECK_CACHE = False
         return False
 
 
@@ -48,10 +57,10 @@ def create_db_engine():
                 engine = create_engine(
                     db_url,
                     pool_pre_ping=True,
-                    pool_recycle=280,
+                    pool_recycle=60,
                     pool_size=10,
                     max_overflow=20,
-                    connect_args={"connect_timeout": 15, "read_timeout": 60, "write_timeout": 60}
+                    connect_args={"connect_timeout": 15, "read_timeout": 120, "write_timeout": 120}
                 )
                 with engine.connect() as conn:
                     pass
@@ -65,11 +74,20 @@ def create_db_engine():
     if settings.FALLBACK_TO_SQLITE:
         sqlite_url = get_sqlite_url()
         logger.info(f"Using local SQLite database: {sqlite_url}")
-        return create_engine(
+        eng = create_engine(
             sqlite_url,
-            connect_args={"check_same_thread": False},
+            connect_args={"check_same_thread": False, "timeout": 30},
             poolclass=NullPool
         )
+        from sqlalchemy import event
+        @event.listens_for(eng, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=15000")
+            cursor.close()
+        return eng
 
     raise RuntimeError("Primary database unreachable and fallback is disabled.")
 
